@@ -1,0 +1,144 @@
+:root {
+  color-scheme: light;
+  --paper: #eceee9;
+  --surface: #f8f9f6;
+  --ink: #1c1f1d;
+  --ink-2: #484e4a;
+  --ink-3: #6f766f;
+  --line: #d2d6cf;
+  --ok: #2c6a48;
+  --warn: #8a5a06;
+  --crit: #b0362a;
+  --ok-soft: #e5f0ea;
+  --warn-soft: #f2e8d2;
+  --crit-soft: #f4e0dc;
+  --font: 'IBM Plex Sans', system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --paper: #0d2843;
+    --surface: #11304f;
+    --ink: #eaf1f7;
+    --ink-2: #b4c7d9;
+    --ink-3: #87a1b9;
+    --line: #284c6f;
+    --ok: #86d6aa;
+    --warn: #f1c46c;
+    --crit: #ff9c8c;
+    --ok-soft: #163f32;
+    --warn-soft: #3a321c;
+    --crit-soft: #3f2430;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--paper);
+  color: var(--ink);
+  font: 16px/1.5 var(--font);
+}
+
+.page {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 48px 24px;
+}
+
+.eyebrow {
+  margin: 0;
+  font: 500 12px var(--mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+h1 {
+  margin: 8px 0 0;
+  font-size: 40px;
+  line-height: 1.1;
+}
+
+.lede {
+  max-width: 62ch;
+  color: var(--ink-2);
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 28px 0;
+}
+
+@media (max-width: 700px) {
+  .cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  padding: 18px;
+}
+
+.card h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.state {
+  margin: 12px 0 8px;
+  font: 600 28px/1.1 var(--mono);
+}
+
+.card p:last-child {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+.card.live,
+.card.ready {
+  background: var(--ok-soft);
+  border-color: var(--ok);
+}
+
+.card.not_ready {
+  background: var(--warn-soft);
+  border-color: var(--warn);
+}
+
+.card.unreachable,
+.card.unknown {
+  background: var(--crit-soft);
+  border-color: var(--crit);
+}
+
+button {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  font: 600 14px var(--font);
+  cursor: pointer;
+}
+
+button:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 3px;
+}
+
+button:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
