@@ -24,7 +24,11 @@ const databaseDetail: Record<HealthReport['database'], string> = {
   unknown: 'Readiness was not checked because the API process is not reachable.',
 };
 
-export function ReadinessPage() {
+export type ReadinessPageProps = {
+  onShowSignIn?: () => void;
+};
+
+export function ReadinessPage({ onShowSignIn }: ReadinessPageProps = {}) {
   const [report, setReport] = useState<HealthReport | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -51,7 +55,14 @@ export function ReadinessPage() {
 
   return (
     <main className="page">
-      <p className="eyebrow">Local spine</p>
+      <div className="header-nav">
+        <p className="eyebrow">Local spine</p>
+        {onShowSignIn && (
+          <button type="button" className="link-button" onClick={onShowSignIn}>
+            Sign in
+          </button>
+        )}
+      </div>
       <h1>DSKT status</h1>
       <p className="lede">
         Liveness is the API process. Readiness is PostgreSQL. A stopped database leaves the process

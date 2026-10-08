@@ -3,4 +3,4 @@ import type { paths } from './schema';
 
 const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
-export const api = createClient<paths>({ baseUrl });
+export const api = createClient<paths>({ baseUrl, credentials: 'include' });
