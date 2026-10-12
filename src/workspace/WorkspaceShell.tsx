@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { AccessAdminPanel } from '../access-admin/AccessAdminPanel';
 import { api } from '../api/client';
 import { SitesPanel } from '../sites/SitesPanel';
+import { TemplatesCatalog } from '../templates/TemplatesCatalog';
 import {
   enterWorkspace,
   type NavigationKey,
@@ -110,11 +111,18 @@ export function WorkspaceShell({
           {entry && selected === 'access_admin' && <AccessAdminPanel />}
           {entry &&
             (selected === 'facilities' || selected === 'workplace' || selected === 'viewer') && (
-              <SitesPanel
-                canMutate={
-                  selected === 'facilities' && session.roles.includes('FACILITIES_ADMIN')
-                }
-              />
+              <>
+                <SitesPanel
+                  canMutate={
+                    selected === 'facilities' && session.roles.includes('FACILITIES_ADMIN')
+                  }
+                />
+                <TemplatesCatalog
+                  canMutate={
+                    selected === 'facilities' && session.roles.includes('FACILITIES_ADMIN')
+                  }
+                />
+              </>
             )}
         </>
       )}

@@ -41,6 +41,9 @@ describe('WorkspaceShell', () => {
       if (path === '/sites') {
         return Promise.resolve({ data: { sites: [] }, response: jsonResponse(200) });
       }
+      if (path === '/element-categories') {
+        return Promise.resolve({ data: { categories: [] }, response: jsonResponse(200) });
+      }
       return Promise.resolve({
         data: {
           workspace: 'facilities',
@@ -69,6 +72,9 @@ describe('WorkspaceShell', () => {
       if (path === '/sites') {
         return Promise.resolve({ data: { sites: [] }, response: jsonResponse(200) });
       }
+      if (path === '/element-categories') {
+        return Promise.resolve({ data: { categories: [] }, response: jsonResponse(200) });
+      }
       return Promise.resolve({
         data: {
           workspace: 'workplace',
@@ -87,14 +93,18 @@ describe('WorkspaceShell', () => {
     );
 
     expect(await screen.findByRole('heading', { name: 'Sites' })).toBeInTheDocument();
-    expect(screen.getByText('No active sites.')).toBeInTheDocument();
+    expect(await screen.findByText('No active sites.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Create site' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create category' })).not.toBeInTheDocument();
   });
 
   it('shows a read-only location hierarchy for a Viewer', async () => {
     get.mockImplementation((path: string) => {
       if (path === '/sites') {
         return Promise.resolve({ data: { sites: [] }, response: jsonResponse(200) });
+      }
+      if (path === '/element-categories') {
+        return Promise.resolve({ data: { categories: [] }, response: jsonResponse(200) });
       }
       return Promise.resolve({
         data: {
@@ -116,6 +126,9 @@ describe('WorkspaceShell', () => {
     get.mockImplementation((path: string) => {
       if (path === '/sites') {
         return Promise.resolve({ data: { sites: [] }, response: jsonResponse(200) });
+      }
+      if (path === '/element-categories') {
+        return Promise.resolve({ data: { categories: [] }, response: jsonResponse(200) });
       }
       if (path === '/workspace/viewer') {
         return Promise.resolve({
