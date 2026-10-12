@@ -1,13 +1,14 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../api/client';
-import { fetchCurrentSession, performSignIn, performSignOut, type User } from './auth';
+import { WorkspaceShell } from '../workspace/WorkspaceShell';
+import { fetchCurrentSession, performSignIn, performSignOut, type Session } from './auth';
 
 export type SignInPageProps = {
   onShowReadiness?: () => void;
 };
 
 export function SignInPage({ onShowReadiness }: SignInPageProps) {
-  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [username, setUsername] = useState('');
@@ -16,9 +17,9 @@ export function SignInPage({ onShowReadiness }: SignInPageProps) {
 
   useEffect(() => {
     let cancelled = false;
-    void fetchCurrentSession(api).then((sessionUser) => {
+    void fetchCurrentSession(api).then((current) => {
       if (!cancelled) {
-        setUser(sessionUser);
+        setSession(current);
         setLoading(false);
       }
     });
@@ -34,7 +35,7 @@ export function SignInPage({ onShowReadiness }: SignInPageProps) {
     const result = await performSignIn(api, username, password);
     setSubmitting(false);
     if (result.success) {
-      setUser(result.user);
+      setSession(result.session);
       setPassword('');
     } else {
       setErrorMessage(result.error);
@@ -44,7 +45,7 @@ export function SignInPage({ onShowReadiness }: SignInPageProps) {
   async function handleSignOut() {
     setSubmitting(true);
     await performSignOut(api);
-    setUser(null);
+    setSession(null);
     setSubmitting(false);
   }
 
@@ -55,6 +56,17 @@ export function SignInPage({ onShowReadiness }: SignInPageProps) {
         <h1>Checking session</h1>
         <p>Restoring existing session...</p>
       </main>
+    );
+  }
+
+  if (session) {
+    return (
+      <WorkspaceShell
+        session={session}
+        onSignOut={() => void handleSignOut()}
+        signingOut={submitting}
+        onShowReadiness={onShowReadiness}
+      />
     );
   }
 
@@ -69,37 +81,7 @@ export function SignInPage({ onShowReadiness }: SignInPageProps) {
         )}
       </div>
 
-      {user ? (
-        <section className="session-card" aria-label="Authenticated session">
-          <h1>Welcome, {user.displayName}</h1>
-          <p className="lede">You are currently signed in with a local synthetic identity.</p>
-
-          <dl className="identity-details">
-            <div>
-              <dt>Display name</dt>
-              <dd>{user.displayName}</dd>
-            </div>
-            <div>
-              <dt>Email</dt>
-              <dd>{user.email}</dd>
-            </div>
-            <div>
-              <dt>User ID</dt>
-              <dd className="mono">{user.id}</dd>
-            </div>
-          </dl>
-
-          <button
-            type="button"
-            onClick={() => void handleSignOut()}
-            disabled={submitting}
-            className="sign-out-btn"
-          >
-            {submitting ? 'Signing out...' : 'Sign out'}
-          </button>
-        </section>
-      ) : (
-        <section className="sign-in-section">
+      <section className="sign-in-section">
           <h1>Sign in locally</h1>
           <p className="lede">
             Development environment uses database-backed synthetic credentials.
@@ -145,7 +127,6 @@ export function SignInPage({ onShowReadiness }: SignInPageProps) {
             </button>
           </form>
         </section>
-      )}
     </main>
   );
 }
