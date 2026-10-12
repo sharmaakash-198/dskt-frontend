@@ -528,6 +528,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/element-templates/{templateId}/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Template Revisions
+         * @description Lists immutable revisions for a Template. New revisions are not current by default.
+         */
+        get: operations["listElementTemplateRevisions"];
+        put?: never;
+        /**
+         * Create an immutable Template Revision
+         * @description Atomically creates the next revision number and normalized orthogonal vertices. The revision is immutable and is not selected as current until activation.
+         */
+        post: operations["createElementTemplateRevision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health/live": {
         parameters: {
             query?: never;
@@ -2523,7 +2547,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "invalid_category_code" | "invalid_category_name" | "invalid_category_order" | "invalid_template_code" | "invalid_template_name" | "organization_missing";
+                        error: "invalid_category_code" | "invalid_category_name" | "invalid_category_order" | "invalid_template_code" | "invalid_template_name" | "organization_missing" | "invalid_spatial_class" | "invalid_assignability" | "invalid_color" | "invalid_vertex_coordinates" | "invalid_vertex_count" | "non_orthogonal_edge" | "zero_length_edge" | "duplicate_closing_vertex" | "repeated_vertex";
                     };
                 };
             };
@@ -2559,7 +2583,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "category_code_taken" | "category_archived" | "template_code_taken";
+                        error: "category_code_taken" | "category_archived" | "template_code_taken" | "template_archived";
                     };
                 };
             };
@@ -2606,7 +2630,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "invalid_category_code" | "invalid_category_name" | "invalid_category_order" | "invalid_template_code" | "invalid_template_name" | "organization_missing";
+                        error: "invalid_category_code" | "invalid_category_name" | "invalid_category_order" | "invalid_template_code" | "invalid_template_name" | "organization_missing" | "invalid_spatial_class" | "invalid_assignability" | "invalid_color" | "invalid_vertex_coordinates" | "invalid_vertex_count" | "non_orthogonal_edge" | "zero_length_edge" | "duplicate_closing_vertex" | "repeated_vertex";
                     };
                 };
             };
@@ -2707,7 +2731,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "category_code_taken" | "category_archived" | "template_code_taken";
+                        error: "category_code_taken" | "category_archived" | "template_code_taken" | "template_archived";
                     };
                 };
             };
@@ -2739,9 +2763,8 @@ export interface operations {
                             code: string;
                             name: string;
                             description: string;
-                            currentRevisionId: null;
-                            /** @enum {boolean} */
-                            placeable: false;
+                            currentRevisionId: string | null;
+                            placeable: boolean;
                             archivedAt: string | null;
                         }[];
                     };
@@ -2791,7 +2814,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "category_code_taken" | "category_archived" | "template_code_taken";
+                        error: "category_code_taken" | "category_archived" | "template_code_taken" | "template_archived";
                     };
                 };
             };
@@ -2816,7 +2839,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Element Template identity. Newly created templates have no current revision and are not placeable. */
+            /** @description Element Template identity. Placeable only when a current revision is selected. */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -2830,9 +2853,8 @@ export interface operations {
                         code: string;
                         name: string;
                         description: string;
-                        currentRevisionId: null;
-                        /** @enum {boolean} */
-                        placeable: false;
+                        currentRevisionId: string | null;
+                        placeable: boolean;
                         archivedAt: string | null;
                     };
                 };
@@ -2845,7 +2867,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "invalid_category_code" | "invalid_category_name" | "invalid_category_order" | "invalid_template_code" | "invalid_template_name" | "organization_missing";
+                        error: "invalid_category_code" | "invalid_category_name" | "invalid_category_order" | "invalid_template_code" | "invalid_template_name" | "organization_missing" | "invalid_spatial_class" | "invalid_assignability" | "invalid_color" | "invalid_vertex_coordinates" | "invalid_vertex_count" | "non_orthogonal_edge" | "zero_length_edge" | "duplicate_closing_vertex" | "repeated_vertex";
                     };
                 };
             };
@@ -2893,7 +2915,195 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "category_code_taken" | "category_archived" | "template_code_taken";
+                        error: "category_code_taken" | "category_archived" | "template_code_taken" | "template_archived";
+                    };
+                };
+            };
+        };
+    };
+    listElementTemplateRevisions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                templateId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        revisions: {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            templateId: string;
+                            revisionNumber: number;
+                            assignable: boolean;
+                            /** @enum {string} */
+                            spatialClass: "PHYSICAL" | "ZONE" | "OBSTACLE";
+                            borderColor: string;
+                            fillColor: string;
+                            vertices: {
+                                x: number;
+                                y: number;
+                            }[];
+                            isCurrent: boolean;
+                        }[];
+                    };
+                };
+            };
+            /** @description Not authenticated or session expired/revoked. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "unauthorized";
+                    };
+                };
+            };
+            /** @description Authenticated but missing a required application role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "forbidden";
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "category_not_found" | "template_not_found";
+                    };
+                };
+            };
+        };
+    };
+    createElementTemplateRevision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                templateId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    spatialClass: "PHYSICAL" | "ZONE" | "OBSTACLE";
+                    assignable: boolean;
+                    borderColor: string;
+                    fillColor: string;
+                    vertices: {
+                        x: number;
+                        y: number;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description Immutable Template Revision. New revisions are not current until explicitly activated. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id: string;
+                        /** Format: uuid */
+                        templateId: string;
+                        revisionNumber: number;
+                        assignable: boolean;
+                        /** @enum {string} */
+                        spatialClass: "PHYSICAL" | "ZONE" | "OBSTACLE";
+                        borderColor: string;
+                        fillColor: string;
+                        vertices: {
+                            x: number;
+                            y: number;
+                        }[];
+                        isCurrent: boolean;
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "invalid_category_code" | "invalid_category_name" | "invalid_category_order" | "invalid_template_code" | "invalid_template_name" | "organization_missing" | "invalid_spatial_class" | "invalid_assignability" | "invalid_color" | "invalid_vertex_coordinates" | "invalid_vertex_count" | "non_orthogonal_edge" | "zero_length_edge" | "duplicate_closing_vertex" | "repeated_vertex";
+                    };
+                };
+            };
+            /** @description Not authenticated or session expired/revoked. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "unauthorized";
+                    };
+                };
+            };
+            /** @description Authenticated but missing a required application role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "forbidden";
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "category_not_found" | "template_not_found";
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "category_code_taken" | "category_archived" | "template_code_taken" | "template_archived";
                     };
                 };
             };

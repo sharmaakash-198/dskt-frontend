@@ -15,9 +15,23 @@ export type ElementTemplate = {
   code: string;
   name: string;
   description: string;
-  currentRevisionId: null;
-  placeable: false;
+  currentRevisionId: string | null;
+  placeable: boolean;
   archivedAt: string | null;
+};
+
+export type SpatialClass = 'PHYSICAL' | 'ZONE' | 'OBSTACLE';
+
+export type TemplateRevision = {
+  id: string;
+  templateId: string;
+  revisionNumber: number;
+  assignable: boolean;
+  spatialClass: SpatialClass;
+  borderColor: string;
+  fillColor: string;
+  vertices: { x: number; y: number }[];
+  isCurrent: boolean;
 };
 
 const ERROR_COPY: Record<string, string> = {
@@ -29,8 +43,18 @@ const ERROR_COPY: Record<string, string> = {
   invalid_category_order: 'Category order is invalid.',
   template_code_taken: 'That template code is already in use in this category.',
   template_not_found: 'That template was not found.',
+  template_archived: 'This template is archived.',
   invalid_template_code: 'Use a template code of letters, numbers, and hyphens.',
   invalid_template_name: 'Enter a template name.',
+  invalid_spatial_class: 'Choose a valid spatial class.',
+  invalid_assignability: 'Only PHYSICAL revisions may be assignable.',
+  invalid_color: 'Use a #RRGGBB color.',
+  invalid_vertex_coordinates: 'Vertices must be integers.',
+  invalid_vertex_count: 'Use 4 to 100 vertices.',
+  non_orthogonal_edge: 'Edges must be horizontal or vertical.',
+  zero_length_edge: 'Edges must have non-zero length.',
+  duplicate_closing_vertex: 'Do not repeat the first vertex to close the polygon.',
+  repeated_vertex: 'Vertices must be unique.',
   organization_missing: 'The organization is not ready for templates.',
   forbidden: 'You cannot change the template catalog.',
   unauthorized: 'Your session is no longer valid.',
@@ -50,6 +74,12 @@ function isCategory(data: unknown): data is ElementCategory {
 function isTemplate(data: unknown): data is ElementTemplate {
   return Boolean(
     data && typeof data === 'object' && 'code' in data && 'placeable' in data && 'categoryId' in data,
+  );
+}
+
+function isRevision(data: unknown): data is TemplateRevision {
+  return Boolean(
+    data && typeof data === 'object' && 'revisionNumber' in data && 'vertices' in data,
   );
 }
 
@@ -128,14 +158,7 @@ export async function listTemplates(
       params: { path: { categoryId } },
     });
     if (response.ok && data && 'templates' in data) {
-      return {
-        ok: true,
-        templates: data.templates.map((item) => ({
-          ...item,
-          currentRevisionId: null,
-          placeable: false as const,
-        })),
-      };
+      return { ok: true, templates: data.templates };
     }
     return { ok: false, error: templateErrorMessage(data, 'Templates are unavailable.') };
   } catch {
@@ -159,5 +182,47 @@ export async function createTemplate(
     return { ok: false, error: templateErrorMessage(data, 'Could not create that template.') };
   } catch {
     return { ok: false, error: 'Could not create that template.' };
+  }
+}
+
+export async function listRevisions(
+  client: Client<paths>,
+  templateId: string,
+): Promise<{ ok: true; revisions: TemplateRevision[] } | { ok: false; error: string }> {
+  try {
+    const { data, response } = await client.GET('/element-templates/{templateId}/revisions', {
+      params: { path: { templateId } },
+    });
+    if (response.ok && data && 'revisions' in data) {
+      return { ok: true, revisions: data.revisions };
+    }
+    return { ok: false, error: templateErrorMessage(data, 'Revisions are unavailable.') };
+  } catch {
+    return { ok: false, error: 'Revisions are unavailable.' };
+  }
+}
+
+export async function createRevision(
+  client: Client<paths>,
+  templateId: string,
+  body: {
+    spatialClass: SpatialClass;
+    assignable: boolean;
+    borderColor: string;
+    fillColor: string;
+    vertices: { x: number; y: number }[];
+  },
+): Promise<{ ok: true; revision: TemplateRevision } | { ok: false; error: string }> {
+  try {
+    const { data, response } = await client.POST('/element-templates/{templateId}/revisions', {
+      params: { path: { templateId } },
+      body,
+    });
+    if (response.ok && isRevision(data)) {
+      return { ok: true, revision: data };
+    }
+    return { ok: false, error: templateErrorMessage(data, 'Could not create that revision.') };
+  } catch {
+    return { ok: false, error: 'Could not create that revision.' };
   }
 }

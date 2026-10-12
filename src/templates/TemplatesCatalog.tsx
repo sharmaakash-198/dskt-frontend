@@ -5,11 +5,14 @@ import {
   createCategory,
   createTemplate,
   listCategories,
+  listRevisions,
   listTemplates,
   reorderCategories,
   type ElementCategory,
   type ElementTemplate,
+  type TemplateRevision,
 } from './api';
+import { RevisionComposer } from './RevisionComposer';
 
 export type TemplatesCatalogProps = {
   canMutate: boolean;
@@ -19,6 +22,8 @@ export function TemplatesCatalog({ canMutate }: TemplatesCatalogProps) {
   const [categories, setCategories] = useState<ElementCategory[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [templates, setTemplates] = useState<ElementTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [revisions, setRevisions] = useState<TemplateRevision[]>([]);
   const [loading, setLoading] = useState(true);
   const [templatesLoading, setTemplatesLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -33,6 +38,8 @@ export function TemplatesCatalog({ canMutate }: TemplatesCatalogProps) {
   const [creatingTemplate, setCreatingTemplate] = useState(false);
 
   const selected = categories.find((category) => category.id === selectedId) ?? null;
+  const selectedTemplate =
+    templates.find((template) => template.id === selectedTemplateId) ?? null;
 
   useEffect(() => {
     let cancelled = false;
@@ -66,15 +73,38 @@ export function TemplatesCatalog({ canMutate }: TemplatesCatalogProps) {
       setTemplatesLoading(false);
       if (result.ok) {
         setTemplates(result.templates);
+        setSelectedTemplateId(result.templates[0]?.id ?? null);
       } else {
         setErrorMessage(result.error);
         setTemplates([]);
+        setSelectedTemplateId(null);
       }
     });
     return () => {
       cancelled = true;
     };
   }, [selectedId]);
+
+  useEffect(() => {
+    if (!selectedTemplateId) {
+      return;
+    }
+    let cancelled = false;
+    void listRevisions(api, selectedTemplateId).then((result) => {
+      if (cancelled) {
+        return;
+      }
+      if (result.ok) {
+        setRevisions(result.revisions);
+      } else {
+        setErrorMessage(result.error);
+        setRevisions([]);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTemplateId]);
 
   async function handleCreateCategory(event: FormEvent) {
     event.preventDefault();
@@ -111,6 +141,8 @@ export function TemplatesCatalog({ canMutate }: TemplatesCatalogProps) {
       setTemplates((current) =>
         [...current, result.template].sort((a, b) => a.code.localeCompare(b.code)),
       );
+      setSelectedTemplateId(result.template.id);
+      setRevisions([]);
       setTemplateCode('');
       setTemplateName('');
       setTemplateDescription('');
@@ -279,10 +311,49 @@ export function TemplatesCatalog({ canMutate }: TemplatesCatalogProps) {
                 <h4>{template.code}</h4>
                 <p>{template.name}</p>
                 {template.description && <p>{template.description}</p>}
-                <p>Not placeable — no published revision yet.</p>
+                <p>
+                  {template.placeable
+                    ? 'Placeable — current revision selected.'
+                    : 'Not placeable — no current revision selected yet.'}
+                </p>
+                <button type="button" onClick={() => setSelectedTemplateId(template.id)}>
+                  {selectedTemplateId === template.id
+                    ? `Selected ${template.code}`
+                    : `Open revisions for ${template.code}`}
+                </button>
               </li>
             ))}
           </ul>
+
+          {selectedTemplate && (
+            <>
+              <h4>Revisions · {selectedTemplate.code}</h4>
+              {revisions.length === 0 && <p>No revisions yet.</p>}
+              <ul className="site-list">
+                {revisions.map((revision) => (
+                  <li key={revision.id} className="site-card">
+                    <p>
+                      Revision {revision.revisionNumber} · {revision.spatialClass}
+                      {revision.assignable ? ' · assignable' : ''}
+                      {revision.isCurrent ? ' · current' : ' · not current'}
+                    </p>
+                    <p>
+                      {revision.vertices.length} vertices · {revision.borderColor} /{' '}
+                      {revision.fillColor}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+              <RevisionComposer
+                template={selectedTemplate}
+                canMutate={canMutate}
+                onCreated={(revision) => {
+                  setRevisions((current) => [revision, ...current]);
+                }}
+                onError={setErrorMessage}
+              />
+            </>
+          )}
         </section>
       )}
     </section>

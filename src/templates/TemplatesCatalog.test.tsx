@@ -61,6 +61,9 @@ describe('TemplatesCatalog', () => {
       if (path === '/element-categories') {
         return Promise.resolve({ data: { categories: [] }, response: jsonResponse(200) });
       }
+      if (String(path).includes('/revisions')) {
+        return Promise.resolve({ data: { revisions: [] }, response: jsonResponse(200) });
+      }
       if (String(path).includes('/templates')) {
         return Promise.resolve({ data: { templates: [] }, response: jsonResponse(200) });
       }
@@ -69,6 +72,27 @@ describe('TemplatesCatalog', () => {
     post.mockImplementation((path: string) => {
       if (path === '/element-categories') {
         return Promise.resolve({ data: createdCategory, response: jsonResponse(201) });
+      }
+      if (String(path).includes('/revisions')) {
+        return Promise.resolve({
+          data: {
+            id: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+            templateId: createdTemplate.id,
+            revisionNumber: 1,
+            assignable: true,
+            spatialClass: 'PHYSICAL',
+            borderColor: '#334455',
+            fillColor: '#CCDDEE',
+            vertices: [
+              { x: 0, y: 0 },
+              { x: 12, y: 0 },
+              { x: 12, y: 8 },
+              { x: 0, y: 8 },
+            ],
+            isCurrent: false,
+          },
+          response: jsonResponse(201),
+        });
       }
       return Promise.resolve({ data: createdTemplate, response: jsonResponse(201) });
     });
@@ -90,6 +114,11 @@ describe('TemplatesCatalog', () => {
 
     expect(await screen.findByRole('heading', { name: 'STD-DESK' })).toBeInTheDocument();
     expect(screen.getByText(/Not placeable/i)).toBeInTheDocument();
+
+    expect(await screen.findByRole('button', { name: 'Create immutable revision' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Create immutable revision' }));
+    expect(await screen.findByText(/Revision 1/i)).toBeInTheDocument();
+    expect(screen.getByText(/not current/i)).toBeInTheDocument();
   });
 
   it('shows validation when category code is taken', async () => {
@@ -115,6 +144,9 @@ describe('TemplatesCatalog', () => {
       if (path === '/element-categories') {
         return Promise.resolve({ data: { categories: [category()] }, response: jsonResponse(200) });
       }
+      if (String(path).includes('/revisions')) {
+        return Promise.resolve({ data: { revisions: [] }, response: jsonResponse(200) });
+      }
       return Promise.resolve({ data: { templates: [template()] }, response: jsonResponse(200) });
     });
 
@@ -122,6 +154,7 @@ describe('TemplatesCatalog', () => {
     expect(await screen.findByRole('heading', { name: 'DESK' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Create category' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Create template' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create immutable revision' })).not.toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'STD-DESK' })).toBeInTheDocument();
   });
 
