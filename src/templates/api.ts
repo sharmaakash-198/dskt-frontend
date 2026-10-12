@@ -49,15 +49,17 @@ const ERROR_COPY: Record<string, string> = {
   invalid_spatial_class: 'Choose a valid spatial class.',
   invalid_assignability: 'Only PHYSICAL revisions may be assignable.',
   invalid_color: 'Use a #RRGGBB color.',
-  invalid_vertex_coordinates: 'Vertices must be integers.',
-  invalid_vertex_count: 'Use 4 to 100 vertices.',
-  non_orthogonal_edge: 'Edges must be horizontal or vertical.',
-  zero_length_edge: 'Edges must have non-zero length.',
-  duplicate_closing_vertex: 'Do not repeat the first vertex to close the polygon.',
-  repeated_vertex: 'Vertices must be unique.',
+  invalid_geometry: 'The geometry is invalid.',
   organization_missing: 'The organization is not ready for templates.',
   forbidden: 'You cannot change the template catalog.',
   unauthorized: 'Your session is no longer valid.',
+};
+
+export type GeometryDiagnostic = {
+  code: string;
+  message: string;
+  vertexIndex?: number;
+  edgeIndex?: number;
 };
 
 export function templateErrorMessage(data: unknown, fallback: string): string {
@@ -65,6 +67,18 @@ export function templateErrorMessage(data: unknown, fallback: string): string {
     return ERROR_COPY[data.error] ?? fallback;
   }
   return fallback;
+}
+
+export function geometryDiagnosticsFrom(data: unknown): GeometryDiagnostic[] {
+  if (
+    data &&
+    typeof data === 'object' &&
+    'diagnostics' in data &&
+    Array.isArray((data as { diagnostics: unknown }).diagnostics)
+  ) {
+    return (data as { diagnostics: GeometryDiagnostic[] }).diagnostics;
+  }
+  return [];
 }
 
 function isCategory(data: unknown): data is ElementCategory {
@@ -212,7 +226,10 @@ export async function createRevision(
     fillColor: string;
     vertices: { x: number; y: number }[];
   },
-): Promise<{ ok: true; revision: TemplateRevision } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; revision: TemplateRevision }
+  | { ok: false; error: string; diagnostics: GeometryDiagnostic[] }
+> {
   try {
     const { data, response } = await client.POST('/element-templates/{templateId}/revisions', {
       params: { path: { templateId } },
@@ -221,8 +238,12 @@ export async function createRevision(
     if (response.ok && isRevision(data)) {
       return { ok: true, revision: data };
     }
-    return { ok: false, error: templateErrorMessage(data, 'Could not create that revision.') };
+    return {
+      ok: false,
+      error: templateErrorMessage(data, 'Could not create that revision.'),
+      diagnostics: geometryDiagnosticsFrom(data),
+    };
   } catch {
-    return { ok: false, error: 'Could not create that revision.' };
+    return { ok: false, error: 'Could not create that revision.', diagnostics: [] };
   }
 }

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { accessibleGeometrySummary, snapToEditingScale } from './geometry';
+import {
+  accessibleGeometrySummary,
+  diagnoseOrthogonalPolygon,
+  snapToEditingScale,
+} from './geometry';
 
 describe('template geometry helpers', () => {
   it('snaps to editing scale independently of viewport zoom', () => {
@@ -17,5 +21,24 @@ describe('template geometry helpers', () => {
     expect(summary).toContain('4 vertices');
     expect(summary).toContain('10 by 5');
     expect(summary).toContain('Closure is implicit');
+  });
+
+  it('advises on clockwise and diagonal geometry without claiming server authority', () => {
+    const clockwise = diagnoseOrthogonalPolygon([
+      { x: 0, y: 0 },
+      { x: 0, y: 8 },
+      { x: 10, y: 8 },
+      { x: 10, y: 0 },
+    ]);
+    expect(clockwise.map((item) => item.code)).toContain('not_anticlockwise');
+
+    const diagonal = diagnoseOrthogonalPolygon([
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 8, y: 8 },
+      { x: 0, y: 8 },
+    ]);
+    expect(diagonal[0]?.code).toBe('non_orthogonal_edge');
+    expect(diagonal[0]?.edgeIndex).toBe(1);
   });
 });

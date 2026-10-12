@@ -1,7 +1,18 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { api } from '../api/client';
-import { createRevision, type ElementTemplate, type SpatialClass, type TemplateRevision } from './api';
-import { accessibleGeometrySummary, snapToEditingScale, type Vertex } from './geometry';
+import {
+  createRevision,
+  type ElementTemplate,
+  type GeometryDiagnostic,
+  type SpatialClass,
+  type TemplateRevision,
+} from './api';
+import {
+  accessibleGeometrySummary,
+  diagnoseOrthogonalPolygon,
+  snapToEditingScale,
+  type Vertex,
+} from './geometry';
 
 const DEFAULT_RECT: Vertex[] = [
   { x: 0, y: 0 },
@@ -32,14 +43,33 @@ export function RevisionComposer({
   const [draftX, setDraftX] = useState('0');
   const [draftY, setDraftY] = useState('0');
   const [submitting, setSubmitting] = useState(false);
+  const [serverDiagnostics, setServerDiagnostics] = useState<GeometryDiagnostic[]>([]);
+  const [focusedVertex, setFocusedVertex] = useState<number | null>(null);
+  const vertexRefs = useRef<Array<HTMLLIElement | null>>([]);
 
   const summary = useMemo(() => accessibleGeometrySummary(vertices), [vertices]);
+  const advisory = useMemo(() => diagnoseOrthogonalPolygon(vertices), [vertices]);
   const boundsLabel = useMemo(() => {
     if (vertices.length === 0) return '0 × 0';
     const xs = vertices.map((v) => v.x);
     const ys = vertices.map((v) => v.y);
     return `${Math.max(...xs) - Math.min(...xs)} × ${Math.max(...ys) - Math.min(...ys)}`;
   }, [vertices]);
+
+  const ready = advisory.length === 0 && vertices.length >= 4;
+
+  function focusDiagnostic(item: GeometryDiagnostic) {
+    const index = item.vertexIndex ?? item.edgeIndex;
+    if (index === undefined) {
+      return;
+    }
+    setFocusedVertex(index);
+    const node = vertexRefs.current[index];
+    node?.focus();
+    if (typeof node?.scrollIntoView === 'function') {
+      node.scrollIntoView({ block: 'nearest' });
+    }
+  }
 
   function addVertex() {
     const x = snapToEditingScale(Number(draftX), editingScale);
@@ -49,6 +79,7 @@ export function RevisionComposer({
       return;
     }
     onError(null);
+    setServerDiagnostics([]);
     setVertices((current) => [...current, { x, y }]);
   }
 
@@ -56,6 +87,7 @@ export function RevisionComposer({
     event.preventDefault();
     setSubmitting(true);
     onError(null);
+    setServerDiagnostics([]);
     const result = await createRevision(api, template.id, {
       spatialClass,
       assignable: spatialClass === 'PHYSICAL' ? assignable : false,
@@ -67,8 +99,13 @@ export function RevisionComposer({
     if (result.ok) {
       onCreated(result.revision);
       setVertices(DEFAULT_RECT);
+      setFocusedVertex(null);
     } else {
       onError(result.error);
+      setServerDiagnostics(result.diagnostics);
+      if (result.diagnostics[0]) {
+        focusDiagnostic(result.diagnostics[0]);
+      }
     }
   }
 
@@ -76,14 +113,39 @@ export function RevisionComposer({
     return null;
   }
 
+  const listedDiagnostics = serverDiagnostics.length > 0 ? serverDiagnostics : advisory;
+
   return (
     <section className="sites-panel" aria-label={`Compose revision for ${template.code}`}>
       <h4>New revision · {template.code}</h4>
       <p>
         World units are 10 cm. Editing scale snaps coordinates; zoom is not used for geometry.
+        Advisory checks guide editing; the server remains authoritative.
       </p>
       <p aria-live="polite">Dimensions: {boundsLabel} world units</p>
       <p aria-live="polite">{summary}</p>
+      {ready ? (
+        <p role="status">Geometry looks ready for submission (subject to server validation).</p>
+      ) : (
+        <p role="status">Geometry needs attention before it can be submitted.</p>
+      )}
+
+      {listedDiagnostics.length > 0 && (
+        <section aria-label="Geometry diagnostics">
+          <h5>Geometry issues</h5>
+          <ul className="site-list">
+            {listedDiagnostics.map((item, index) => (
+              <li key={`${item.code}-${index}`}>
+                <button type="button" onClick={() => focusDiagnostic(item)}>
+                  {item.message}
+                  {item.vertexIndex !== undefined ? ` (vertex ${item.vertexIndex + 1})` : ''}
+                  {item.edgeIndex !== undefined ? ` (edge ${item.edgeIndex + 1})` : ''}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <form className="sign-in-form" onSubmit={(event) => void handleSubmit(event)}>
         <div className="form-group">
@@ -172,13 +234,27 @@ export function RevisionComposer({
 
         <ol aria-label="Geometry vertices">
           {vertices.map((vertex, index) => (
-            <li key={`${vertex.x},${vertex.y},${index}`}>
-              ({vertex.x}, {vertex.y})
+            <li
+              key={`${vertex.x},${vertex.y},${index}`}
+              id={`vertex-${template.id}-${index}`}
+              tabIndex={-1}
+              ref={(node) => {
+                vertexRefs.current[index] = node;
+              }}
+              aria-current={focusedVertex === index ? 'true' : undefined}
+              style={
+                focusedVertex === index
+                  ? { outline: '2px solid currentColor', fontWeight: 700 }
+                  : undefined
+              }
+            >
+              Vertex {index + 1}: ({vertex.x}, {vertex.y})
               <button
                 type="button"
-                onClick={() =>
-                  setVertices((current) => current.filter((_, itemIndex) => itemIndex !== index))
-                }
+                onClick={() => {
+                  setServerDiagnostics([]);
+                  setVertices((current) => current.filter((_, itemIndex) => itemIndex !== index));
+                }}
               >
                 Remove vertex {index + 1}
               </button>

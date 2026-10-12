@@ -2547,7 +2547,14 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "invalid_category_code" | "invalid_category_name" | "invalid_category_order" | "invalid_template_code" | "invalid_template_name" | "organization_missing" | "invalid_spatial_class" | "invalid_assignability" | "invalid_color" | "invalid_vertex_coordinates" | "invalid_vertex_count" | "non_orthogonal_edge" | "zero_length_edge" | "duplicate_closing_vertex" | "repeated_vertex";
+                        error: "invalid_category_code" | "invalid_category_name" | "invalid_category_order" | "invalid_template_code" | "invalid_template_name" | "organization_missing" | "invalid_spatial_class" | "invalid_assignability" | "invalid_color" | "invalid_geometry";
+                        diagnostics?: {
+                            /** @enum {string} */
+                            code: "invalid_vertex_coordinates" | "invalid_vertex_count" | "non_orthogonal_edge" | "zero_length_edge" | "duplicate_closing_vertex" | "repeated_vertex" | "self_intersecting" | "not_anticlockwise" | "degenerate_polygon";
+                            message: string;
+                            vertexIndex?: number;
+                            edgeIndex?: number;
+                        }[];
                     };
                 };
             };
@@ -2630,7 +2637,14 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "invalid_category_code" | "invalid_category_name" | "invalid_category_order" | "invalid_template_code" | "invalid_template_name" | "organization_missing" | "invalid_spatial_class" | "invalid_assignability" | "invalid_color" | "invalid_vertex_coordinates" | "invalid_vertex_count" | "non_orthogonal_edge" | "zero_length_edge" | "duplicate_closing_vertex" | "repeated_vertex";
+                        error: "invalid_category_code" | "invalid_category_name" | "invalid_category_order" | "invalid_template_code" | "invalid_template_name" | "organization_missing" | "invalid_spatial_class" | "invalid_assignability" | "invalid_color" | "invalid_geometry";
+                        diagnostics?: {
+                            /** @enum {string} */
+                            code: "invalid_vertex_coordinates" | "invalid_vertex_count" | "non_orthogonal_edge" | "zero_length_edge" | "duplicate_closing_vertex" | "repeated_vertex" | "self_intersecting" | "not_anticlockwise" | "degenerate_polygon";
+                            message: string;
+                            vertexIndex?: number;
+                            edgeIndex?: number;
+                        }[];
                     };
                 };
             };
@@ -2867,7 +2881,14 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "invalid_category_code" | "invalid_category_name" | "invalid_category_order" | "invalid_template_code" | "invalid_template_name" | "organization_missing" | "invalid_spatial_class" | "invalid_assignability" | "invalid_color" | "invalid_vertex_coordinates" | "invalid_vertex_count" | "non_orthogonal_edge" | "zero_length_edge" | "duplicate_closing_vertex" | "repeated_vertex";
+                        error: "invalid_category_code" | "invalid_category_name" | "invalid_category_order" | "invalid_template_code" | "invalid_template_name" | "organization_missing" | "invalid_spatial_class" | "invalid_assignability" | "invalid_color" | "invalid_geometry";
+                        diagnostics?: {
+                            /** @enum {string} */
+                            code: "invalid_vertex_coordinates" | "invalid_vertex_count" | "non_orthogonal_edge" | "zero_length_edge" | "duplicate_closing_vertex" | "repeated_vertex" | "self_intersecting" | "not_anticlockwise" | "degenerate_polygon";
+                            message: string;
+                            vertexIndex?: number;
+                            edgeIndex?: number;
+                        }[];
                     };
                 };
             };
@@ -3055,7 +3076,14 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "invalid_category_code" | "invalid_category_name" | "invalid_category_order" | "invalid_template_code" | "invalid_template_name" | "organization_missing" | "invalid_spatial_class" | "invalid_assignability" | "invalid_color" | "invalid_vertex_coordinates" | "invalid_vertex_count" | "non_orthogonal_edge" | "zero_length_edge" | "duplicate_closing_vertex" | "repeated_vertex";
+                        error: "invalid_category_code" | "invalid_category_name" | "invalid_category_order" | "invalid_template_code" | "invalid_template_name" | "organization_missing" | "invalid_spatial_class" | "invalid_assignability" | "invalid_color" | "invalid_geometry";
+                        diagnostics?: {
+                            /** @enum {string} */
+                            code: "invalid_vertex_coordinates" | "invalid_vertex_count" | "non_orthogonal_edge" | "zero_length_edge" | "duplicate_closing_vertex" | "repeated_vertex" | "self_intersecting" | "not_anticlockwise" | "degenerate_polygon";
+                            message: string;
+                            vertexIndex?: number;
+                            edgeIndex?: number;
+                        }[];
                     };
                 };
             };
