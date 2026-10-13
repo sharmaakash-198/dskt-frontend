@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../api/client';
 import {
+  activateRevision,
   archiveCategory,
   createCategory,
   createTemplate,
@@ -36,6 +37,7 @@ export function TemplatesCatalog({ canMutate }: TemplatesCatalogProps) {
   const [templateDescription, setTemplateDescription] = useState('');
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [creatingTemplate, setCreatingTemplate] = useState(false);
+  const [activatingRevisionId, setActivatingRevisionId] = useState<string | null>(null);
 
   const selected = categories.find((category) => category.id === selectedId) ?? null;
   const selectedTemplate =
@@ -186,6 +188,29 @@ export function TemplatesCatalog({ canMutate }: TemplatesCatalogProps) {
     }
   }
 
+  async function handleActivateRevision(revision: TemplateRevision) {
+    if (!selectedTemplateId) {
+      return;
+    }
+    setActivatingRevisionId(revision.id);
+    setErrorMessage(null);
+    const result = await activateRevision(api, selectedTemplateId, revision.id);
+    setActivatingRevisionId(null);
+    if (result.ok) {
+      setTemplates((current) =>
+        current.map((template) => (template.id === result.template.id ? result.template : template)),
+      );
+      setRevisions((current) =>
+        current.map((item) => ({
+          ...item,
+          isCurrent: item.id === revision.id,
+        })),
+      );
+    } else {
+      setErrorMessage(result.error);
+    }
+  }
+
   return (
     <section className="sites-panel" aria-label="Template catalog">
       <h2>Template catalog</h2>
@@ -329,7 +354,7 @@ export function TemplatesCatalog({ canMutate }: TemplatesCatalogProps) {
             <>
               <h4>Revisions · {selectedTemplate.code}</h4>
               {revisions.length === 0 && <p>No revisions yet.</p>}
-              <ul className="site-list">
+              <ul className="site-list" aria-label={`Revision history for ${selectedTemplate.code}`}>
                 {revisions.map((revision) => (
                   <li key={revision.id} className="site-card">
                     <p>
@@ -341,6 +366,19 @@ export function TemplatesCatalog({ canMutate }: TemplatesCatalogProps) {
                       {revision.vertices.length} vertices · {revision.borderColor} /{' '}
                       {revision.fillColor}
                     </p>
+                    {canMutate && !revision.isCurrent && (
+                      <div className="site-actions">
+                        <button
+                          type="button"
+                          disabled={activatingRevisionId === revision.id}
+                          onClick={() => void handleActivateRevision(revision)}
+                        >
+                          {activatingRevisionId === revision.id
+                            ? `Activating revision ${revision.revisionNumber}...`
+                            : `Activate revision ${revision.revisionNumber}`}
+                        </button>
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>

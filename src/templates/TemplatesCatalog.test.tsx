@@ -117,8 +117,9 @@ describe('TemplatesCatalog', () => {
 
     expect(await screen.findByRole('button', { name: 'Create immutable revision' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Create immutable revision' }));
-    expect(await screen.findByText(/Revision 1/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Revision 1 · PHYSICAL/i)).toBeInTheDocument();
     expect(screen.getByText(/not current/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Activate revision 1' })).toBeInTheDocument();
   });
 
   it('shows validation when category code is taken', async () => {
@@ -137,6 +138,130 @@ describe('TemplatesCatalog', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'That category code is already in use.',
     );
+  });
+
+  it('activates a revision as current for future placements', async () => {
+    const revisionId = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+    const placeableTemplate = template({
+      currentRevisionId: revisionId,
+      placeable: true,
+    });
+    get.mockImplementation((path: string) => {
+      if (path === '/element-categories') {
+        return Promise.resolve({ data: { categories: [category()] }, response: jsonResponse(200) });
+      }
+      if (String(path).includes('/revisions')) {
+        return Promise.resolve({
+          data: {
+            revisions: [
+              {
+                id: revisionId,
+                templateId: placeableTemplate.id,
+                revisionNumber: 1,
+                assignable: true,
+                spatialClass: 'PHYSICAL',
+                borderColor: '#334455',
+                fillColor: '#CCDDEE',
+                vertices: [
+                  { x: 0, y: 0 },
+                  { x: 12, y: 0 },
+                  { x: 12, y: 8 },
+                  { x: 0, y: 8 },
+                ],
+                isCurrent: false,
+              },
+            ],
+          },
+          response: jsonResponse(200),
+        });
+      }
+      return Promise.resolve({ data: { templates: [template()] }, response: jsonResponse(200) });
+    });
+    post.mockResolvedValue({
+      data: placeableTemplate,
+      response: jsonResponse(200),
+    });
+
+    render(<TemplatesCatalog canMutate />);
+    expect(await screen.findByText(/Revision 1 · PHYSICAL/i)).toBeInTheDocument();
+    expect(screen.getByText(/not current/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Activate revision 1' }));
+    expect(await screen.findByText(/Revision 1 · PHYSICAL · assignable · current/i)).toBeInTheDocument();
+    expect(screen.getByText(/Placeable/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Activate revision 1' })).not.toBeInTheDocument();
+    expect(post).toHaveBeenCalledWith(
+      '/element-templates/{templateId}/revisions/{revisionId}/activate',
+      expect.objectContaining({
+        params: {
+          path: {
+            templateId: placeableTemplate.id,
+            revisionId,
+          },
+        },
+      }),
+    );
+  });
+
+  it('shows read-only revision history without activate controls', async () => {
+    const revisionId = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+    get.mockImplementation((path: string) => {
+      if (path === '/element-categories') {
+        return Promise.resolve({ data: { categories: [category()] }, response: jsonResponse(200) });
+      }
+      if (String(path).includes('/revisions')) {
+        return Promise.resolve({
+          data: {
+            revisions: [
+              {
+                id: revisionId,
+                templateId: template().id,
+                revisionNumber: 2,
+                assignable: false,
+                spatialClass: 'ZONE',
+                borderColor: '#000000',
+                fillColor: '#ffffff',
+                vertices: [
+                  { x: 0, y: 0 },
+                  { x: 10, y: 0 },
+                  { x: 10, y: 8 },
+                  { x: 0, y: 8 },
+                ],
+                isCurrent: true,
+              },
+              {
+                id: 'dddddddd-dddd-dddd-dddd-dddddddddddd',
+                templateId: template().id,
+                revisionNumber: 1,
+                assignable: true,
+                spatialClass: 'PHYSICAL',
+                borderColor: '#111111',
+                fillColor: '#222222',
+                vertices: [
+                  { x: 0, y: 0 },
+                  { x: 8, y: 0 },
+                  { x: 8, y: 6 },
+                  { x: 0, y: 6 },
+                ],
+                isCurrent: false,
+              },
+            ],
+          },
+          response: jsonResponse(200),
+        });
+      }
+      return Promise.resolve({
+        data: {
+          templates: [template({ currentRevisionId: revisionId, placeable: true })],
+        },
+        response: jsonResponse(200),
+      });
+    });
+
+    render(<TemplatesCatalog canMutate={false} />);
+    expect(await screen.findByText(/Revision 2 · ZONE · current/i)).toBeInTheDocument();
+    expect(screen.getByText(/Revision 1 · PHYSICAL · assignable · not current/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Activate revision/i })).not.toBeInTheDocument();
   });
 
   it('hides mutate controls for read-only callers', async () => {
