@@ -50,6 +50,7 @@ const ERROR_COPY: Record<string, string> = {
   invalid_assignability: 'Only PHYSICAL revisions may be assignable.',
   invalid_color: 'Use a #RRGGBB color.',
   invalid_geometry: 'The geometry is invalid.',
+  revision_not_found: 'That revision was not found for this template.',
   organization_missing: 'The organization is not ready for templates.',
   forbidden: 'You cannot change the template catalog.',
   unauthorized: 'Your session is no longer valid.',
@@ -245,5 +246,26 @@ export async function createRevision(
     };
   } catch {
     return { ok: false, error: 'Could not create that revision.', diagnostics: [] };
+  }
+}
+
+export async function activateRevision(
+  client: Client<paths>,
+  templateId: string,
+  revisionId: string,
+): Promise<{ ok: true; template: ElementTemplate } | { ok: false; error: string }> {
+  try {
+    const { data, response } = await client.POST(
+      '/element-templates/{templateId}/revisions/{revisionId}/activate',
+      {
+        params: { path: { templateId, revisionId } },
+      },
+    );
+    if (response.ok && isTemplate(data)) {
+      return { ok: true, template: data };
+    }
+    return { ok: false, error: templateErrorMessage(data, 'Could not activate that revision.') };
+  } catch {
+    return { ok: false, error: 'Could not activate that revision.' };
   }
 }

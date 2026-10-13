@@ -552,6 +552,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/element-templates/{templateId}/revisions/{revisionId}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Activate a Template Revision as current
+         * @description Sets current_revision_id for future placements. Does not mutate revision metadata, geometry, or vertices. Existing placements remain pinned to their original revision.
+         */
+        post: operations["activateElementTemplateRevision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health/live": {
         parameters: {
             query?: never;
@@ -2733,7 +2753,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "category_not_found" | "template_not_found";
+                        error: "category_not_found" | "template_not_found" | "revision_not_found";
                     };
                 };
             };
@@ -2816,7 +2836,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "category_not_found" | "template_not_found";
+                        error: "category_not_found" | "template_not_found" | "revision_not_found";
                     };
                 };
             };
@@ -2924,7 +2944,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "category_not_found" | "template_not_found";
+                        error: "category_not_found" | "template_not_found" | "revision_not_found";
                     };
                 };
             };
@@ -3012,7 +3032,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "category_not_found" | "template_not_found";
+                        error: "category_not_found" | "template_not_found" | "revision_not_found";
                     };
                 };
             };
@@ -3119,7 +3139,89 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "category_not_found" | "template_not_found";
+                        error: "category_not_found" | "template_not_found" | "revision_not_found";
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "category_code_taken" | "category_archived" | "template_code_taken" | "template_archived";
+                    };
+                };
+            };
+        };
+    };
+    activateElementTemplateRevision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                templateId: string;
+                revisionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Element Template identity. Placeable only when a current revision is selected. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id: string;
+                        /** Format: uuid */
+                        categoryId: string;
+                        code: string;
+                        name: string;
+                        description: string;
+                        currentRevisionId: string | null;
+                        placeable: boolean;
+                        archivedAt: string | null;
+                    };
+                };
+            };
+            /** @description Not authenticated or session expired/revoked. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "unauthorized";
+                    };
+                };
+            };
+            /** @description Authenticated but missing a required application role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "forbidden";
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "category_not_found" | "template_not_found" | "revision_not_found";
                     };
                 };
             };
