@@ -8,6 +8,7 @@ import {
   listFloorPlanRevisions,
   type FloorPlanRevision,
 } from './floor-plan-api';
+import { BoundaryEditor } from './BoundaryEditor';
 
 const EDITING_SCALES = [1, 2, 4, 8, 16, 32, 64, 128, 256];
 
@@ -67,6 +68,12 @@ export function FloorWorkspace({
     }
   }
 
+  function handleRevisionUpdated(updated: FloorPlanRevision) {
+    setRevisions((current) =>
+      current.map((r) => (r.id === updated.id ? updated : r)),
+    );
+  }
+
   const hasRevisions = revisions.length > 0;
   const draftRevision = revisions.find((r) => r.lifecycleState === 'DRAFT');
 
@@ -123,13 +130,23 @@ export function FloorWorkspace({
       {!loading && hasRevisions && (
         <div className="floor-plan-content">
           {draftRevision && (
-            <div className="draft-summary" role="region" aria-label="Draft revision details">
-              <h3>Draft Floor Plan Active</h3>
-              <p>
-                Revision {draftRevision.revisionNumber} is in Draft state at scale{' '}
-                {draftRevision.editingScale}x (Version {draftRevision.concurrencyVersion}).
-              </p>
-            </div>
+            <>
+              <div className="draft-summary" role="region" aria-label="Draft revision details">
+                <h3>Draft Floor Plan Active</h3>
+                <p>
+                  Revision {draftRevision.revisionNumber} is in Draft state at scale{' '}
+                  {draftRevision.editingScale}x (Version {draftRevision.concurrencyVersion}).
+                </p>
+              </div>
+
+              <BoundaryEditor
+                floorId={floor.id}
+                revision={draftRevision}
+                canMutate={canMutate}
+                onRevisionUpdated={handleRevisionUpdated}
+                onError={setErrorMessage}
+              />
+            </>
           )}
 
           <h3>Revision History</h3>
