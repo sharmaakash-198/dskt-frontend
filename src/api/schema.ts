@@ -440,6 +440,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/floors/{floorId}/floor-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Floor Plan details and active revision
+         * @description Retrieves the Floor Plan identity and active revision for a floor. Returns null values if the floor has no floor plan yet.
+         */
+        get: operations["getFloorPlan"];
+        put?: never;
+        /**
+         * Create Floor Plan identity and initial draft revision
+         * @description Creates the unique Floor Plan identity for a Floor and its initial Draft revision (revision 1) with a permitted 2ⁿ editing scale. Repeated calls with the same idempotency key return the existing plan.
+         */
+        post: operations["createFloorPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/floors/{floorId}/floor-plan/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Floor Plan Revisions
+         * @description Lists all revisions for a floor plan with lifecycle states (Draft, Published, Archived). Returns an empty list for an empty floor without error.
+         */
+        get: operations["listFloorPlanRevisions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/element-categories": {
         parameters: {
             query?: never;
@@ -2469,6 +2513,328 @@ export interface operations {
                     "application/json": {
                         /** @enum {string} */
                         error: "floor_code_taken" | "floor_archived" | "building_archived";
+                    };
+                };
+            };
+        };
+    };
+    getFloorPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                floorId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Floor Plan and its active revision, or nulls if floor has no plan. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        floorPlan: {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            floorId: string;
+                            createdAt: string;
+                            updatedAt: string;
+                        } | null;
+                        activeRevision: {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            floorPlanId: string;
+                            revisionNumber: number;
+                            /** @enum {string} */
+                            lifecycleState: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+                            editingScale: number;
+                            concurrencyVersion: number;
+                            createdAt: string;
+                            updatedAt: string;
+                        } | null;
+                    };
+                };
+            };
+            /** @description Not authenticated or session expired/revoked. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "unauthorized";
+                    };
+                };
+            };
+            /** @description Authenticated but missing a required application role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "forbidden";
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "floor_not_found" | "floor_plan_not_found";
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "floor_archived" | "floor_plan_already_exists";
+                    };
+                };
+            };
+        };
+    };
+    createFloorPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                floorId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    editingScale?: number;
+                    idempotencyKey?: string;
+                } | null;
+            };
+        };
+        responses: {
+            /** @description Created or replayed Floor Plan identity and draft revision. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description Floor Plan identity projection. */
+                        floorPlan: {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            floorId: string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                        /** @description Floor Plan Revision projection. */
+                        revision: {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            floorPlanId: string;
+                            revisionNumber: number;
+                            /** @enum {string} */
+                            lifecycleState: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+                            editingScale: number;
+                            concurrencyVersion: number;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+            /** @description Created or replayed Floor Plan identity and draft revision. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description Floor Plan identity projection. */
+                        floorPlan: {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            floorId: string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                        /** @description Floor Plan Revision projection. */
+                        revision: {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            floorPlanId: string;
+                            revisionNumber: number;
+                            /** @enum {string} */
+                            lifecycleState: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+                            editingScale: number;
+                            concurrencyVersion: number;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "invalid_editing_scale";
+                    };
+                };
+            };
+            /** @description Not authenticated or session expired/revoked. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "unauthorized";
+                    };
+                };
+            };
+            /** @description Authenticated but missing a required application role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "forbidden";
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "floor_not_found" | "floor_plan_not_found";
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "floor_archived" | "floor_plan_already_exists";
+                    };
+                };
+            };
+        };
+    };
+    listFloorPlanRevisions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                floorId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of Floor Plan Revisions, or empty if floor has no plan. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        revisions: {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            floorPlanId: string;
+                            revisionNumber: number;
+                            /** @enum {string} */
+                            lifecycleState: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+                            editingScale: number;
+                            concurrencyVersion: number;
+                            createdAt: string;
+                            updatedAt: string;
+                        }[];
+                    };
+                };
+            };
+            /** @description Not authenticated or session expired/revoked. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "unauthorized";
+                    };
+                };
+            };
+            /** @description Authenticated but missing a required application role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "forbidden";
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "floor_not_found" | "floor_plan_not_found";
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "floor_archived" | "floor_plan_already_exists";
                     };
                 };
             };

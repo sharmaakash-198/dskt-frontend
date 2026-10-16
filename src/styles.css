@@ -330,3 +330,97 @@ select {
   color: var(--ink);
   font: 14px var(--font);
 }
+
+.floor-workspace {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  padding: 24px;
+}
+
+.floor-subtitle {
+  color: var(--ink-2);
+  margin-top: -4px;
+  margin-bottom: 20px;
+}
+
+.empty-floor-plan {
+  padding: 16px 0;
+}
+
+.create-plan-form {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 320px;
+}
+
+.draft-summary {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  padding: 16px;
+  margin: 16px 0;
+}
+
+.draft-summary h3 {
+  margin: 0 0 8px;
+}
+
+.revision-list {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.revision-card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.revision-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.revision-meta {
+  display: flex;
+  gap: 16px;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-badge.status-draft {
+  background: var(--ok-soft);
+  color: var(--ok);
+  border: 1px solid var(--ok);
+}
+
+.status-badge.status-published {
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #7dd3fc;
+}
+
+.status-badge.status-archived {
+  background: var(--line);
+  color: var(--ink-3);
+  border: 1px solid var(--ink-3);
+}
+

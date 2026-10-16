@@ -109,6 +109,7 @@ export function SitesPanel({ canMutate }: SitesPanelProps) {
         site={view.site}
         building={view.building}
         floor={view.floor}
+        canMutate={canMutate}
         onBack={() =>
           setView({ level: 'floors', site: view.site, building: view.building })
         }
