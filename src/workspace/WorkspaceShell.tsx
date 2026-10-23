@@ -3,6 +3,7 @@ import { AccessAdminPanel } from '../access-admin/AccessAdminPanel';
 import { api } from '../api/client';
 import { SitesPanel } from '../sites/SitesPanel';
 import { TemplatesCatalog } from '../templates/TemplatesCatalog';
+import { EmployeeImportPanel } from '../workforce/EmployeeImportPanel';
 import {
   enterWorkspace,
   type NavigationKey,
@@ -109,6 +110,9 @@ export function WorkspaceShell({
             </p>
           )}
           {entry && selected === 'access_admin' && <AccessAdminPanel />}
+          {entry && selected === 'workplace' && (
+            <EmployeeImportPanel canImport={session.roles.includes('WORKPLACE_PLANNER')} />
+          )}
           {entry &&
             (selected === 'facilities' || selected === 'workplace' || selected === 'viewer') && (
               <>
@@ -124,6 +128,7 @@ export function WorkspaceShell({
                 />
               </>
             )}
+
         </>
       )}
     </main>

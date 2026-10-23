@@ -25,9 +25,13 @@ import {
   updateFloorPlanRevisionBoundary,
   updateFloorPlanRevisionScale,
   updatePlacedElement,
+  validateFloorPlanDraft,
+  publishFloorPlanRevision,
   type FloorPlanLease,
   type FloorPlanRevision,
   type PlacedElement,
+  type PublicationValidationError,
+  type PublicationValidationResult,
 } from './floor-plan-api';
 import {
   createInitialHistoryState,
@@ -63,6 +67,15 @@ export type AutosaveStatus =
   | 'validation_error'
   | 'conflict'
   | 'unavailable';
+
+const VALIDATION_CATEGORY_LABELS: Record<string, string> = {
+  BOUNDARY: 'Floor Boundary Issues',
+  CONTAINMENT: 'Boundary Containment Issues',
+  COLLISION: 'Placement Collision Issues',
+  TEMPLATE: 'Template Reference Issues',
+  LABEL: 'Label Validation Issues',
+  LIFECYCLE: 'Lifecycle Precondition Issues',
+};
 
 export type BoundaryEditorProps = {
   floorId: string;
@@ -106,6 +119,14 @@ export function BoundaryEditor({
   const [historyState, setHistoryState] = useState<HistoryState>(() => createInitialHistoryState(revision));
   const [concurrencyConflict, setConcurrencyConflict] = useState<{ isStale: boolean; currentServerVersion?: number } | null>(null);
   const [recoveringConflict, setRecoveringConflict] = useState(false);
+
+  // Publication preview validation state
+  const [validationResult, setValidationResult] = useState<PublicationValidationResult | null>(null);
+  const [validating, setValidating] = useState<boolean>(false);
+  const [focusedValidationEntityId, setFocusedValidationEntityId] = useState<string | null>(null);
+  const [showPublishConfirm, setShowPublishConfirm] = useState<boolean>(false);
+  const [publishing, setPublishing] = useState<boolean>(false);
+  const [publicationSuccess, setPublicationSuccess] = useState<boolean>(false);
 
   // Keep ref for unmount cleanup
   const currentLeaseTokenRef = useRef<string | null>(null);
@@ -1121,6 +1142,87 @@ export function BoundaryEditor({
     });
   }, [placements]);
 
+  async function handleValidatePublication() {
+    setValidating(true);
+    setValidationResult(null);
+    setFocusedValidationEntityId(null);
+    const res = await validateFloorPlanDraft(api, floorId, revision.id, {
+      concurrencyVersion: revision.concurrencyVersion,
+    });
+    setValidating(false);
+    if (res.ok) {
+      setValidationResult(res.result);
+    } else {
+      if (res.isConcurrencyConflict) {
+        setConcurrencyConflict({
+          isStale: true,
+          currentServerVersion: res.currentConcurrencyVersion ?? revision.concurrencyVersion + 1,
+        });
+      } else {
+        onError(res.error);
+      }
+    }
+  }
+
+  async function handleConfirmPublish() {
+    setPublishing(true);
+    const clientCmdId = `pub-${revision.id}-${Date.now()}`;
+    const res = await publishFloorPlanRevision(api, floorId, revision.id, {
+      concurrencyVersion: revision.concurrencyVersion,
+      leaseToken: currentLeaseTokenRef.current,
+      clientCommandId: clientCmdId,
+    });
+    setPublishing(false);
+    setShowPublishConfirm(false);
+    if (res.ok) {
+      setValidationResult(null);
+      setPublicationSuccess(true);
+      onRevisionUpdated(res.revision);
+    } else {
+      if (res.isConcurrencyConflict) {
+        setConcurrencyConflict({
+          isStale: true,
+          currentServerVersion: res.currentConcurrencyVersion ?? revision.concurrencyVersion + 1,
+        });
+      } else if (res.validationErrors && res.validationErrors.length > 0) {
+        setValidationResult({
+          isValid: false,
+          ready: false,
+          floorId,
+          revisionId: revision.id,
+          concurrencyVersion: res.currentConcurrencyVersion ?? revision.concurrencyVersion,
+          summary: res.error,
+          errors: res.validationErrors,
+          warnings: [],
+        });
+      } else {
+        onError(res.error);
+      }
+    }
+  }
+
+  function handleFocusEntity(err: PublicationValidationError) {
+    if (err.entityType === 'PLACEMENT') {
+      handleSelectPlacement(err.entityId);
+      setFocusedValidationEntityId(err.entityId);
+    } else if (err.entityType === 'BOUNDARY') {
+      setSelectedPlacementId(null);
+      setFocusedValidationEntityId('boundary');
+    }
+  }
+
+  const groupedErrors = useMemo(() => {
+    if (!validationResult || validationResult.errors.length === 0) return {};
+    const groups: Record<string, PublicationValidationError[]> = {};
+    for (const err of validationResult.errors) {
+      if (!groups[err.category]) {
+        groups[err.category] = [];
+      }
+      groups[err.category]!.push(err);
+    }
+    return groups;
+  }, [validationResult]);
+
   return (
     <div className="boundary-editor" role="region" aria-label="Floor Boundary Editor">
       {/* Read-only conflict banner when leased by another user */}
@@ -1207,68 +1309,283 @@ export function BoundaryEditor({
         </div>
       )}
 
+      {/* Published Revision Banner */}
+      {revision.lifecycleState === 'PUBLISHED' && (
+        <div
+          className="published-revision-banner"
+          role="status"
+          aria-label="Published Floor Plan"
+          data-testid="published-revision-banner"
+        >
+          <div className="published-banner-header">
+            <h4>✓ Official Published Floor Plan</h4>
+            <span className="badge-published" data-testid="published-badge">
+              Revision {revision.revisionNumber} (Published)
+            </span>
+          </div>
+          <p>
+            This floor plan revision is published and immutable. Geometry and placements are read-only.
+          </p>
+        </div>
+      )}
+
+      {/* Publication Success Banner */}
+      {publicationSuccess && (
+        <div
+          className="publication-success-banner"
+          role="status"
+          aria-live="polite"
+          data-testid="publication-success-banner"
+        >
+          <div className="success-header">
+            <h4>✓ Floor Plan Published Successfully</h4>
+            <button
+              type="button"
+              className="secondary-button"
+              data-testid="dismiss-publication-success-btn"
+              onClick={() => setPublicationSuccess(false)}
+            >
+              Dismiss
+            </button>
+          </div>
+          <p>
+            Revision {revision.revisionNumber} is now the official published floor plan.
+          </p>
+        </div>
+      )}
+
+      {/* Publication Ready Banner */}
+      {validationResult && validationResult.ready && (
+        <div
+          className="publication-ready-banner"
+          role="status"
+          aria-live="polite"
+          data-testid="publication-ready-banner"
+        >
+          <div className="ready-header">
+            <h4>✓ Publication Ready</h4>
+            <span className="badge-ready">Ready for Publication</span>
+          </div>
+          <p>{validationResult.summary}</p>
+          <p className="ready-meta">
+            Draft passes all publication checks at concurrency version {validationResult.concurrencyVersion}.
+          </p>
+          <div className="ready-actions">
+            <button
+              type="button"
+              className="primary-button publish-button"
+              data-testid="publish-floor-plan-button"
+              onClick={() => setShowPublishConfirm(true)}
+              disabled={publishing}
+            >
+              Publish Floor Plan
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              data-testid="dismiss-publication-ready-btn"
+              onClick={() => setValidationResult(null)}
+              disabled={publishing}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Publication Confirmation Modal */}
+      {showPublishConfirm && (
+        <div
+          className="modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="confirm-publish-title"
+          data-testid="publication-confirm-dialog"
+        >
+          <div className="modal-content publication-confirm-card">
+            <h3 id="confirm-publish-title">Confirm Publication</h3>
+            <p>
+              Are you sure you want to publish <strong>Revision {revision.revisionNumber}</strong>?
+            </p>
+            <p className="confirm-warning">
+              Once published, this revision becomes <strong>immutable</strong> and will serve as the official published floor plan for this floor. Any previously published revision will be archived.
+            </p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                data-testid="cancel-publish-btn"
+                onClick={() => setShowPublishConfirm(false)}
+                disabled={publishing}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                data-testid="confirm-publish-submit-btn"
+                onClick={() => void handleConfirmPublish()}
+                disabled={publishing}
+              >
+                {publishing ? 'Publishing...' : 'Confirm & Publish'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Publication Validation Blockers Panel */}
+      {validationResult && !validationResult.ready && (
+        <section
+          className="publication-validation-panel"
+          role="region"
+          aria-label="Publication Validation Preview"
+          data-testid="publication-validation-panel"
+        >
+          <div className="validation-panel-header">
+            <h4>⚠ Publication Validation Blockers</h4>
+            <span className="badge-error" data-testid="blocker-count-badge">
+              {validationResult.errors.length} Blocker(s)
+            </span>
+            <button
+              type="button"
+              className="secondary-button"
+              data-testid="close-validation-panel-btn"
+              onClick={() => setValidationResult(null)}
+            >
+              Close
+            </button>
+          </div>
+          <p className="validation-summary" data-testid="validation-summary">
+            {validationResult.summary}
+          </p>
+
+          {Object.entries(groupedErrors).map(([category, catErrors]) => (
+            <fieldset
+              key={category}
+              className="validation-category-group"
+              data-testid={`category-group-${category.toLowerCase()}`}
+            >
+              <legend className="category-legend">
+                <strong>{VALIDATION_CATEGORY_LABELS[category] || category}</strong> ({catErrors.length})
+              </legend>
+              <ul className="validation-error-list" role="list">
+                {catErrors.map((err, idx) => (
+                  <li
+                    key={`${err.code}-${err.entityId}-${idx}`}
+                    className={`validation-error-item ${focusedValidationEntityId === err.entityId ? 'focused-error-item' : ''}`}
+                    data-testid="validation-error-item"
+                  >
+                    <div className="error-header">
+                      <span className="error-code-badge" data-testid="error-code-badge">
+                        {err.code}
+                      </span>
+                      <span className="error-entity-badge">{err.entityType}</span>
+                    </div>
+                    <p className="error-message">
+                      <strong>Issue:</strong> {err.message}
+                    </p>
+                    <p className="error-corrective">
+                      <strong>Action:</strong> {err.correctiveAction}
+                    </p>
+                    <div className="error-actions">
+                      {err.entityType === 'PLACEMENT' && (
+                        <button
+                          type="button"
+                          className="link-button focus-entity-button"
+                          data-testid={`focus-placement-${err.entityId}`}
+                          onClick={() => handleFocusEntity(err)}
+                        >
+                          Focus Placed Space
+                        </button>
+                      )}
+                      {err.entityType === 'BOUNDARY' && (
+                        <button
+                          type="button"
+                          className="link-button focus-entity-button"
+                          data-testid="focus-boundary-button"
+                          onClick={() => handleFocusEntity(err)}
+                        >
+                          Focus Floor Boundary
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </fieldset>
+          ))}
+        </section>
+      )}
+
       <div className="editor-toolbar">
         {/* Autosave badge */}
-        <div className="toolbar-group autosave-group" aria-live="polite">
-          <span className={`autosave-badge autosave-${autosaveStatus}`} data-testid="autosave-status">
-            {autosaveStatus === 'saving' && 'Saving...'}
-            {autosaveStatus === 'saved' && '✓ Saved'}
-            {autosaveStatus === 'validation_error' && 'Validation Error'}
-            {autosaveStatus === 'conflict' && '⚠ Conflict'}
-            {autosaveStatus === 'unavailable' && '⚠ Offline / Unavailable'}
-            {autosaveStatus === 'idle' && '✓ Ready'}
-          </span>
-        </div>
+        {canMutate && revision.lifecycleState === 'DRAFT' && (
+          <div className="toolbar-group autosave-group" aria-live="polite">
+            <span className={`autosave-badge autosave-${autosaveStatus}`} data-testid="autosave-status">
+              {autosaveStatus === 'saving' && 'Saving...'}
+              {autosaveStatus === 'saved' && '✓ Saved'}
+              {autosaveStatus === 'validation_error' && 'Validation Error'}
+              {autosaveStatus === 'conflict' && '⚠ Conflict'}
+              {autosaveStatus === 'unavailable' && '⚠ Offline / Unavailable'}
+              {autosaveStatus === 'idle' && '✓ Ready'}
+            </span>
+          </div>
+        )}
 
         {/* History (Undo / Redo) group */}
-        <div className="toolbar-group history-group">
-          <button
-            type="button"
-            className="secondary-button"
-            data-testid="undo-button"
-            onClick={handleUndo}
-            disabled={!canMutate || revision.lifecycleState !== 'DRAFT' || historyState.undoStack.length === 0}
-            title={
-              historyState.undoStack.length > 0 && historyState.undoStack[historyState.undoStack.length - 1]
-                ? `Undo: ${historyState.undoStack[historyState.undoStack.length - 1]?.description} (Ctrl+Z)`
-                : 'Nothing to undo'
-            }
-            aria-label="Undo"
-          >
-            ↶ Undo
-          </button>
-          <button
-            type="button"
-            className="secondary-button"
-            data-testid="redo-button"
-            onClick={handleRedo}
-            disabled={!canMutate || revision.lifecycleState !== 'DRAFT' || historyState.redoStack.length === 0}
-            title={
-              historyState.redoStack.length > 0 && historyState.redoStack[historyState.redoStack.length - 1]
-                ? `Redo: ${historyState.redoStack[historyState.redoStack.length - 1]?.description} (Ctrl+Y)`
-                : 'Nothing to redo'
-            }
-            aria-label="Redo"
-          >
-            ↷ Redo
-          </button>
-        </div>
+        {canMutate && revision.lifecycleState === 'DRAFT' && (
+          <div className="toolbar-group history-group">
+            <button
+              type="button"
+              className="secondary-button"
+              data-testid="undo-button"
+              onClick={handleUndo}
+              disabled={historyState.undoStack.length === 0}
+              title={
+                historyState.undoStack.length > 0 && historyState.undoStack[historyState.undoStack.length - 1]
+                  ? `Undo: ${historyState.undoStack[historyState.undoStack.length - 1]?.description} (Ctrl+Z)`
+                  : 'Nothing to undo'
+              }
+              aria-label="Undo"
+            >
+              ↶ Undo
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              data-testid="redo-button"
+              onClick={handleRedo}
+              disabled={historyState.redoStack.length === 0}
+              title={
+                historyState.redoStack.length > 0 && historyState.redoStack[historyState.redoStack.length - 1]
+                  ? `Redo: ${historyState.redoStack[historyState.redoStack.length - 1]?.description} (Ctrl+Y)`
+                  : 'Nothing to redo'
+              }
+              aria-label="Redo"
+            >
+              ↷ Redo
+            </button>
+          </div>
+        )}
 
-        <div className="toolbar-group">
-          <label htmlFor="boundary-editing-scale">Editing Scale</label>
-          <select
-            id="boundary-editing-scale"
-            value={editingScale}
-            onChange={(e) => void handleScaleChange(Number(e.target.value))}
-            disabled={!canMutate || revision.lifecycleState !== 'DRAFT'}
-          >
-            {PERMITTED_EDITING_SCALES.map((scale) => (
-              <option key={scale} value={scale}>
-                {scale}x ({scale * 10} cm grid)
-              </option>
-            ))}
-          </select>
-        </div>
+        {canMutate && revision.lifecycleState === 'DRAFT' && (
+          <div className="toolbar-group">
+            <label htmlFor="boundary-editing-scale">Editing Scale</label>
+            <select
+              id="boundary-editing-scale"
+              value={editingScale}
+              onChange={(e) => void handleScaleChange(Number(e.target.value))}
+              disabled={!canMutate || revision.lifecycleState !== 'DRAFT'}
+            >
+              {PERMITTED_EDITING_SCALES.map((scale) => (
+                <option key={scale} value={scale}>
+                  {scale}x ({scale * 10} cm grid)
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div className="toolbar-group">
           <label htmlFor="boundary-zoom">Zoom</label>
@@ -1300,6 +1617,21 @@ export function BoundaryEditor({
         {cursorCoords && (
           <div className="coordinate-feedback" aria-live="polite">
             <strong>Cursor:</strong> ({cursorCoords.x}, {cursorCoords.y}) world units
+          </div>
+        )}
+
+        {canMutate && revision.lifecycleState === 'DRAFT' && (
+          <div className="toolbar-group publication-group">
+            <button
+              type="button"
+              className="primary-button validate-draft-button"
+              data-testid="validate-publication-button"
+              onClick={() => void handleValidatePublication()}
+              disabled={validating}
+              aria-label="Validate Draft for Publication"
+            >
+              {validating ? 'Validating...' : 'Validate for Publication'}
+            </button>
           </div>
         )}
       </div>

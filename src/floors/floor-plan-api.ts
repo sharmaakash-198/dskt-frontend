@@ -41,6 +41,8 @@ export type FloorPlanRevision = {
   lifecycleState: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
   editingScale: number;
   concurrencyVersion: number;
+  publishedByUserId?: string | null;
+  publishedAt?: string | null;
   boundary: Vertex[];
   placements?: PlacedElement[];
   createdAt: string;
@@ -70,10 +72,37 @@ export type FloorPlanLeaseState = {
   lease: FloorPlanLease | null;
 };
 
+export type PublicationValidationError = {
+  code: string;
+  category: 'BOUNDARY' | 'CONTAINMENT' | 'COLLISION' | 'TEMPLATE' | 'LABEL' | 'LIFECYCLE';
+  entityType: 'BOUNDARY' | 'PLACEMENT' | 'REVISION' | 'FLOOR';
+  entityId: string;
+  conflictingEntityId?: string;
+  message: string;
+  correctiveAction: string;
+  vertexIndex?: number;
+  edgeIndex?: number;
+  details?: Record<string, unknown>;
+};
+
+export type PublicationValidationResult = {
+  isValid: boolean;
+  ready: boolean;
+  floorId: string;
+  revisionId: string;
+  concurrencyVersion: number;
+  summary: string;
+  errors: PublicationValidationError[];
+  warnings: PublicationValidationError[];
+};
+
 const ERROR_COPY: Record<string, string> = {
   floor_plan_already_exists: 'A floor plan already exists for this floor.',
   floor_not_found: 'That floor was not found.',
   floor_archived: 'This floor is archived.',
+  building_archived: 'This building is archived.',
+  site_archived: 'This site is archived.',
+  published_revision_not_found: 'No published floor plan revision exists for this floor.',
   revision_not_found: 'That revision was not found.',
   revision_not_draft: 'Only draft revisions can be edited.',
   concurrency_conflict: 'This revision was modified by another session. Refresh and try again.',
@@ -91,6 +120,7 @@ const ERROR_COPY: Record<string, string> = {
   invalid_coordinates: 'Coordinates must be integers in 10-cm world units.',
   duplicate_label: 'A space with this label already exists on this floor plan revision.',
   placement_not_found: 'That placed space was not found.',
+  publication_validation_failed: 'Publication validation failed. Resolve all blockers before publishing.',
   forbidden: 'You cannot manage floor plans or boundaries.',
   unauthorized: 'Your session is no longer valid.',
 };
@@ -141,15 +171,19 @@ export async function createDraftFloorPlan(
 export async function listFloorPlanRevisions(
   client: Client<paths>,
   floorId: string,
-): Promise<{ ok: true; revisions: FloorPlanRevision[] } | { ok: false; error: string }> {
+): Promise<{ ok: true; revisions: FloorPlanRevision[] } | { ok: false; error: string; errorCode?: string }> {
   try {
     const { data, response } = await client.GET('/floors/{floorId}/floor-plan/revisions', {
       params: { path: { floorId } },
     });
     if (response.ok && data && 'revisions' in data) {
-      return { ok: true, revisions: data.revisions };
+      return { ok: true, revisions: data.revisions as FloorPlanRevision[] };
     }
-    return { ok: false, error: floorPlanErrorMessage(data, 'Revisions are unavailable.') };
+    const errorCode =
+      data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
+        ? data.error
+        : undefined;
+    return { ok: false, error: floorPlanErrorMessage(data, 'Revisions are unavailable.'), errorCode };
   } catch {
     return { ok: false, error: 'Revisions are unavailable.' };
   }
@@ -158,17 +192,66 @@ export async function listFloorPlanRevisions(
 export async function getFloorPlan(
   client: Client<paths>,
   floorId: string,
-): Promise<{ ok: true; floorPlan: FloorPlan | null; activeRevision: FloorPlanRevision | null } | { ok: false; error: string }> {
+): Promise<
+  | {
+      ok: true;
+      floorPlan: FloorPlan | null;
+      activeRevision: FloorPlanRevision | null;
+      publishedRevision: FloorPlanRevision | null;
+    }
+  | { ok: false; error: string; errorCode?: string }
+> {
   try {
     const { data, response } = await client.GET('/floors/{floorId}/floor-plan', {
       params: { path: { floorId } },
     });
     if (response.ok && data) {
-      return { ok: true, floorPlan: data.floorPlan, activeRevision: data.activeRevision };
+      return {
+        ok: true,
+        floorPlan: data.floorPlan,
+        activeRevision: data.activeRevision as FloorPlanRevision | null,
+        publishedRevision: data.publishedRevision as FloorPlanRevision | null,
+      };
     }
-    return { ok: false, error: floorPlanErrorMessage(data, 'Floor plan details are unavailable.') };
+    const errorCode =
+      data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
+        ? data.error
+        : undefined;
+    return { ok: false, error: floorPlanErrorMessage(data, 'Floor plan details are unavailable.'), errorCode };
   } catch {
     return { ok: false, error: 'Floor plan details are unavailable.' };
+  }
+}
+
+export async function getPublishedFloorPlan(
+  client: Client<paths>,
+  floorId: string,
+): Promise<
+  | { ok: true; floorPlan: FloorPlan; revision: FloorPlanRevision }
+  | { ok: false; error: string; errorCode?: string }
+> {
+  try {
+    const { data, response } = await client.GET('/floors/{floorId}/floor-plan/published', {
+      params: { path: { floorId } },
+    });
+    if (response.ok && data && 'floorPlan' in data && 'revision' in data) {
+      return {
+        ok: true,
+        floorPlan: data.floorPlan as FloorPlan,
+        revision: data.revision as FloorPlanRevision,
+      };
+    }
+    const errorCode =
+      data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
+        ? data.error
+        : undefined;
+    return {
+      ok: false,
+      error: floorPlanErrorMessage(data, 'Published floor plan is unavailable.'),
+      errorCode,
+    };
+  } catch {
+    return { ok: false, error: 'Published floor plan is unavailable.' };
   }
 }
 
@@ -598,3 +681,112 @@ export async function deletePlacedElement(
     return { ok: false, error: 'Could not remove placed space.' };
   }
 }
+
+export async function validateFloorPlanDraft(
+  client: Client<paths>,
+  floorId: string,
+  revisionId: string,
+  options?: { concurrencyVersion?: number },
+): Promise<
+  | { ok: true; result: PublicationValidationResult }
+  | {
+      ok: false;
+      error: string;
+      errorCode?: string;
+      isConflict?: boolean;
+      isConcurrencyConflict?: boolean;
+      currentConcurrencyVersion?: number;
+    }
+> {
+  try {
+    const { data, response } = await client.POST(
+      '/floors/{floorId}/floor-plan/revisions/{revisionId}/validate',
+      {
+        params: { path: { floorId, revisionId } },
+        body:
+          options?.concurrencyVersion !== undefined
+            ? { concurrencyVersion: options.concurrencyVersion }
+            : null,
+      },
+    );
+    if (response.ok && data) {
+      return { ok: true, result: data as PublicationValidationResult };
+    }
+    const conflict = extractConflictMeta(response, data);
+    return {
+      ok: false,
+      error: floorPlanErrorMessage(data, 'Could not validate floor plan draft.'),
+      ...conflict,
+    };
+  } catch {
+    return { ok: false, error: 'Could not validate floor plan draft.' };
+  }
+}
+
+export async function publishFloorPlanRevision(
+  client: Client<paths>,
+  floorId: string,
+  revisionId: string,
+  input: {
+    concurrencyVersion: number;
+    leaseToken?: string | null;
+    clientCommandId?: string | null;
+  },
+): Promise<
+  | { ok: true; revision: FloorPlanRevision }
+  | {
+      ok: false;
+      error: string;
+      errorCode?: string;
+      isConflict?: boolean;
+      isConcurrencyConflict?: boolean;
+      currentConcurrencyVersion?: number;
+      validationErrors?: PublicationValidationError[];
+    }
+> {
+  try {
+    const headers: Record<string, string> = {};
+    if (input.leaseToken) headers['x-lease-token'] = input.leaseToken;
+    if (input.clientCommandId) headers['x-client-command-id'] = input.clientCommandId;
+
+    const { data, response } = await client.POST(
+      '/floors/{floorId}/floor-plan/revisions/{revisionId}/publish',
+      {
+        params: {
+          path: { floorId, revisionId },
+          header: Object.keys(headers).length > 0 ? (headers as never) : undefined,
+        },
+        body: {
+          concurrencyVersion: input.concurrencyVersion,
+          leaseToken: input.leaseToken || undefined,
+          clientCommandId: input.clientCommandId || undefined,
+        },
+      },
+    );
+
+    if (response.ok && data && 'revision' in data) {
+      return { ok: true, revision: data.revision as FloorPlanRevision };
+    }
+
+    const conflict = extractConflictMeta(response, data);
+    let validationErrors: PublicationValidationError[] | undefined;
+    if (
+      data &&
+      typeof data === 'object' &&
+      'validationErrors' in data &&
+      Array.isArray((data as { validationErrors?: unknown }).validationErrors)
+    ) {
+      validationErrors = (data as { validationErrors: PublicationValidationError[] }).validationErrors;
+    }
+
+    return {
+      ok: false,
+      error: floorPlanErrorMessage(data, 'Could not publish floor plan revision.'),
+      validationErrors,
+      ...conflict,
+    };
+  } catch {
+    return { ok: false, error: 'Could not publish floor plan revision.' };
+  }
+}
+

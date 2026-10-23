@@ -449,7 +449,7 @@ export interface paths {
         };
         /**
          * Get Floor Plan details and active revision
-         * @description Retrieves the Floor Plan identity and active revision for a floor. Returns null values if the floor has no floor plan yet.
+         * @description Retrieves the Floor Plan identity, active revision, and published revision for a floor. For Facilities Admin, activeRevision defaults to Draft if present. For Workplace Planner and Viewer, activeRevision is the Published revision (Draft geometry is never exposed). Returns null values if floor has no plan.
          */
         get: operations["getFloorPlan"];
         put?: never;
@@ -473,7 +473,7 @@ export interface paths {
         };
         /**
          * List Floor Plan Revisions
-         * @description Lists all revisions for a floor plan with lifecycle states (Draft, Published, Archived). Returns an empty list for an empty floor without error.
+         * @description Lists revisions for a floor plan with lifecycle states (Draft, Published, Archived). Facilities Admin can inspect Draft, Published, and Archived revisions. Workplace Planner and Viewer receive only permitted immutable Published revisions. Returns an empty list for an empty floor without error.
          */
         get: operations["listFloorPlanRevisions"];
         put?: never;
@@ -493,9 +493,69 @@ export interface paths {
         };
         /**
          * Get Floor Plan revision details
-         * @description Retrieves a single floor plan revision with boundary and placements.
+         * @description Retrieves a single floor plan revision with boundary and placements. Workplace Planner and Viewer callers can access the Published revision; Draft and Archived revisions are denied (403).
          */
         get: operations["getFloorPlanRevision"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/floors/{floorId}/floor-plan/revisions/{revisionId}/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run authoritative publication validation on a draft floor plan revision
+         * @description Evaluates floor boundary structure, transformed placement geometry, containment, mutual collisions, template references, labels, and lifecycle preconditions without mutating the revision.
+         */
+        post: operations["validateFloorPlanDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/floors/{floorId}/floor-plan/revisions/{revisionId}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish a draft floor plan revision as the immutable published revision
+         * @description Authoritatively validates the draft, archives any prior published revision, and transitions this draft to Published in a single transaction.
+         */
+        post: operations["publishFloorPlanRevision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/floors/{floorId}/floor-plan/published": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get current Published Floor Plan and revision
+         * @description Retrieves the immutable Published Floor Plan revision for an active floor. Available to Facilities Admin, Workplace Planner, and Viewer callers.
+         */
+        get: operations["getPublishedFloorPlan"];
         put?: never;
         post?: never;
         delete?: never;
@@ -802,6 +862,66 @@ export interface paths {
          * @description Sets current_revision_id for future placements. Does not mutate revision metadata, geometry, or vertices. Existing placements remain pinned to their original revision.
          */
         post: operations["activateElementTemplateRevision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employee-imports/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview an employee workbook
+         * @description Upload a bounded .xlsx workbook to generate a preview of proposed employee changes without altering domain data.
+         */
+        post: operations["previewEmployeeWorkbook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employee-imports/{importId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get employee import summary
+         * @description Retrieve preview metadata and summary counts for an import.
+         */
+        get: operations["getEmployeeImport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employee-imports/{importId}/rows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List employee import staging rows
+         * @description List normalized relational staging rows for preview with optional action filter and pagination.
+         */
+        get: operations["listEmployeeImportRows"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2721,7 +2841,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Floor Plan and its active revision, or nulls if floor has no plan. */
+            /** @description Floor Plan and its active and published revisions, or nulls if floor has no plan. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2746,6 +2866,63 @@ export interface operations {
                             lifecycleState: "DRAFT" | "PUBLISHED" | "ARCHIVED";
                             editingScale: number;
                             concurrencyVersion: number;
+                            publishedByUserId?: string | null;
+                            publishedAt?: string | null;
+                            /** @default [] */
+                            boundary: {
+                                x: number;
+                                y: number;
+                            }[];
+                            /** @default [] */
+                            placements: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                floorPlanRevisionId: string;
+                                /** Format: uuid */
+                                placementIdentityId: string;
+                                /** Format: uuid */
+                                elementTemplateRevisionId: string;
+                                /** Format: uuid */
+                                templateId: string;
+                                templateCode: string;
+                                templateName: string;
+                                templateRevisionNumber: number;
+                                assignable: boolean;
+                                /** @enum {string} */
+                                spatialClass: "PHYSICAL" | "ZONE" | "OBSTACLE";
+                                borderColor: string;
+                                fillColor: string;
+                                positionX: number;
+                                positionY: number;
+                                rotationDegrees: number;
+                                label: string | null;
+                                vertices: {
+                                    x: number;
+                                    y: number;
+                                }[];
+                                localVertices: {
+                                    x: number;
+                                    y: number;
+                                }[];
+                                createdAt: string;
+                                updatedAt: string;
+                            }[];
+                            createdAt: string;
+                            updatedAt: string;
+                        } | null;
+                        publishedRevision?: {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            floorPlanId: string;
+                            revisionNumber: number;
+                            /** @enum {string} */
+                            lifecycleState: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+                            editingScale: number;
+                            concurrencyVersion: number;
+                            publishedByUserId?: string | null;
+                            publishedAt?: string | null;
                             /** @default [] */
                             boundary: {
                                 x: number;
@@ -2824,7 +3001,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
+                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "published_revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
                     };
                 };
             };
@@ -2836,7 +3013,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -2888,6 +3065,8 @@ export interface operations {
                             lifecycleState: "DRAFT" | "PUBLISHED" | "ARCHIVED";
                             editingScale: number;
                             concurrencyVersion: number;
+                            publishedByUserId?: string | null;
+                            publishedAt?: string | null;
                             /** @default [] */
                             boundary: {
                                 x: number;
@@ -2961,6 +3140,8 @@ export interface operations {
                             lifecycleState: "DRAFT" | "PUBLISHED" | "ARCHIVED";
                             editingScale: number;
                             concurrencyVersion: number;
+                            publishedByUserId?: string | null;
+                            publishedAt?: string | null;
                             /** @default [] */
                             boundary: {
                                 x: number;
@@ -3021,6 +3202,22 @@ export interface operations {
                             vertexIndex?: number;
                             edgeIndex?: number;
                         }[];
+                        validationErrors?: {
+                            code: string;
+                            /** @enum {string} */
+                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE";
+                            /** @enum {string} */
+                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR";
+                            entityId: string;
+                            conflictingEntityId?: string;
+                            message: string;
+                            correctiveAction: string;
+                            vertexIndex?: number;
+                            edgeIndex?: number;
+                            details?: {
+                                [key: string]: unknown;
+                            };
+                        }[];
                     };
                 };
             };
@@ -3056,7 +3253,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
+                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "published_revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
                     };
                 };
             };
@@ -3068,7 +3265,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -3103,6 +3300,8 @@ export interface operations {
                             lifecycleState: "DRAFT" | "PUBLISHED" | "ARCHIVED";
                             editingScale: number;
                             concurrencyVersion: number;
+                            publishedByUserId?: string | null;
+                            publishedAt?: string | null;
                             /** @default [] */
                             boundary: {
                                 x: number;
@@ -3181,7 +3380,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
+                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "published_revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
                     };
                 };
             };
@@ -3193,7 +3392,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -3230,6 +3429,8 @@ export interface operations {
                             lifecycleState: "DRAFT" | "PUBLISHED" | "ARCHIVED";
                             editingScale: number;
                             concurrencyVersion: number;
+                            publishedByUserId?: string | null;
+                            publishedAt?: string | null;
                             /** @default [] */
                             boundary: {
                                 x: number;
@@ -3308,7 +3509,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
+                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "published_revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
                     };
                 };
             };
@@ -3320,7 +3521,469 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        currentConcurrencyVersion?: number;
+                    };
+                };
+            };
+        };
+    };
+    validateFloorPlanDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                floorId: string;
+                revisionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    concurrencyVersion?: number;
+                } | null;
+            };
+        };
+        responses: {
+            /** @description Authoritative publication validation result for a draft floor plan revision. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        isValid: boolean;
+                        ready: boolean;
+                        /** Format: uuid */
+                        floorId: string;
+                        /** Format: uuid */
+                        revisionId: string;
+                        concurrencyVersion: number;
+                        summary: string;
+                        errors: {
+                            code: string;
+                            /** @enum {string} */
+                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE";
+                            /** @enum {string} */
+                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR";
+                            entityId: string;
+                            conflictingEntityId?: string;
+                            message: string;
+                            correctiveAction: string;
+                            vertexIndex?: number;
+                            edgeIndex?: number;
+                            details?: {
+                                [key: string]: unknown;
+                            };
+                        }[];
+                        warnings: {
+                            code: string;
+                            /** @enum {string} */
+                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE";
+                            /** @enum {string} */
+                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR";
+                            entityId: string;
+                            conflictingEntityId?: string;
+                            message: string;
+                            correctiveAction: string;
+                            vertexIndex?: number;
+                            edgeIndex?: number;
+                            details?: {
+                                [key: string]: unknown;
+                            };
+                        }[];
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: string;
+                        diagnostics?: {
+                            code: string;
+                            message: string;
+                            vertexIndex?: number;
+                            edgeIndex?: number;
+                        }[];
+                        validationErrors?: {
+                            code: string;
+                            /** @enum {string} */
+                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE";
+                            /** @enum {string} */
+                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR";
+                            entityId: string;
+                            conflictingEntityId?: string;
+                            message: string;
+                            correctiveAction: string;
+                            vertexIndex?: number;
+                            edgeIndex?: number;
+                            details?: {
+                                [key: string]: unknown;
+                            };
+                        }[];
+                    };
+                };
+            };
+            /** @description Not authenticated or session expired/revoked. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "unauthorized";
+                    };
+                };
+            };
+            /** @description Authenticated but missing a required application role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "forbidden";
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "published_revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        currentConcurrencyVersion?: number;
+                    };
+                };
+            };
+        };
+    };
+    publishFloorPlanRevision: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-lease-token"?: string;
+                "x-client-command-id"?: string;
+            };
+            path: {
+                floorId: string;
+                revisionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    concurrencyVersion: number;
+                    leaseToken?: string;
+                    clientCommandId?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Floor Plan Revision details. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description Floor Plan Revision projection. */
+                        revision: {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            floorPlanId: string;
+                            revisionNumber: number;
+                            /** @enum {string} */
+                            lifecycleState: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+                            editingScale: number;
+                            concurrencyVersion: number;
+                            publishedByUserId?: string | null;
+                            publishedAt?: string | null;
+                            /** @default [] */
+                            boundary: {
+                                x: number;
+                                y: number;
+                            }[];
+                            /** @default [] */
+                            placements: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                floorPlanRevisionId: string;
+                                /** Format: uuid */
+                                placementIdentityId: string;
+                                /** Format: uuid */
+                                elementTemplateRevisionId: string;
+                                /** Format: uuid */
+                                templateId: string;
+                                templateCode: string;
+                                templateName: string;
+                                templateRevisionNumber: number;
+                                assignable: boolean;
+                                /** @enum {string} */
+                                spatialClass: "PHYSICAL" | "ZONE" | "OBSTACLE";
+                                borderColor: string;
+                                fillColor: string;
+                                positionX: number;
+                                positionY: number;
+                                rotationDegrees: number;
+                                label: string | null;
+                                vertices: {
+                                    x: number;
+                                    y: number;
+                                }[];
+                                localVertices: {
+                                    x: number;
+                                    y: number;
+                                }[];
+                                createdAt: string;
+                                updatedAt: string;
+                            }[];
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: string;
+                        diagnostics?: {
+                            code: string;
+                            message: string;
+                            vertexIndex?: number;
+                            edgeIndex?: number;
+                        }[];
+                        validationErrors?: {
+                            code: string;
+                            /** @enum {string} */
+                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE";
+                            /** @enum {string} */
+                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR";
+                            entityId: string;
+                            conflictingEntityId?: string;
+                            message: string;
+                            correctiveAction: string;
+                            vertexIndex?: number;
+                            edgeIndex?: number;
+                            details?: {
+                                [key: string]: unknown;
+                            };
+                        }[];
+                    };
+                };
+            };
+            /** @description Not authenticated or session expired/revoked. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "unauthorized";
+                    };
+                };
+            };
+            /** @description Authenticated but missing a required application role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "forbidden";
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "published_revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        currentConcurrencyVersion?: number;
+                    };
+                };
+            };
+        };
+    };
+    getPublishedFloorPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                floorId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current Published Floor Plan and revision. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description Floor Plan identity projection. */
+                        floorPlan: {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            floorId: string;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                        /** @description Floor Plan Revision projection. */
+                        revision: {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            floorPlanId: string;
+                            revisionNumber: number;
+                            /** @enum {string} */
+                            lifecycleState: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+                            editingScale: number;
+                            concurrencyVersion: number;
+                            publishedByUserId?: string | null;
+                            publishedAt?: string | null;
+                            /** @default [] */
+                            boundary: {
+                                x: number;
+                                y: number;
+                            }[];
+                            /** @default [] */
+                            placements: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                floorPlanRevisionId: string;
+                                /** Format: uuid */
+                                placementIdentityId: string;
+                                /** Format: uuid */
+                                elementTemplateRevisionId: string;
+                                /** Format: uuid */
+                                templateId: string;
+                                templateCode: string;
+                                templateName: string;
+                                templateRevisionNumber: number;
+                                assignable: boolean;
+                                /** @enum {string} */
+                                spatialClass: "PHYSICAL" | "ZONE" | "OBSTACLE";
+                                borderColor: string;
+                                fillColor: string;
+                                positionX: number;
+                                positionY: number;
+                                rotationDegrees: number;
+                                label: string | null;
+                                vertices: {
+                                    x: number;
+                                    y: number;
+                                }[];
+                                localVertices: {
+                                    x: number;
+                                    y: number;
+                                }[];
+                                createdAt: string;
+                                updatedAt: string;
+                            }[];
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+            /** @description Not authenticated or session expired/revoked. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "unauthorized";
+                    };
+                };
+            };
+            /** @description Authenticated but missing a required application role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "forbidden";
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "published_revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -3400,7 +4063,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
+                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "published_revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
                     };
                 };
             };
@@ -3412,7 +4075,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -3494,7 +4157,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
+                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "published_revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
                     };
                 };
             };
@@ -3506,7 +4169,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -3591,7 +4254,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
+                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "published_revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
                     };
                 };
             };
@@ -3603,7 +4266,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -3674,7 +4337,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
+                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "published_revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
                     };
                 };
             };
@@ -3686,7 +4349,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -3769,7 +4432,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
+                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "published_revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
                     };
                 };
             };
@@ -3781,7 +4444,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -3832,6 +4495,8 @@ export interface operations {
                         lifecycleState: "DRAFT" | "PUBLISHED" | "ARCHIVED";
                         editingScale: number;
                         concurrencyVersion: number;
+                        publishedByUserId?: string | null;
+                        publishedAt?: string | null;
                         /** @default [] */
                         boundary: {
                             x: number;
@@ -3891,6 +4556,22 @@ export interface operations {
                             vertexIndex?: number;
                             edgeIndex?: number;
                         }[];
+                        validationErrors?: {
+                            code: string;
+                            /** @enum {string} */
+                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE";
+                            /** @enum {string} */
+                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR";
+                            entityId: string;
+                            conflictingEntityId?: string;
+                            message: string;
+                            correctiveAction: string;
+                            vertexIndex?: number;
+                            edgeIndex?: number;
+                            details?: {
+                                [key: string]: unknown;
+                            };
+                        }[];
                     };
                 };
             };
@@ -3926,7 +4607,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
+                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "published_revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
                     };
                 };
             };
@@ -3938,7 +4619,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -3985,6 +4666,8 @@ export interface operations {
                         lifecycleState: "DRAFT" | "PUBLISHED" | "ARCHIVED";
                         editingScale: number;
                         concurrencyVersion: number;
+                        publishedByUserId?: string | null;
+                        publishedAt?: string | null;
                         /** @default [] */
                         boundary: {
                             x: number;
@@ -4044,6 +4727,22 @@ export interface operations {
                             vertexIndex?: number;
                             edgeIndex?: number;
                         }[];
+                        validationErrors?: {
+                            code: string;
+                            /** @enum {string} */
+                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE";
+                            /** @enum {string} */
+                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR";
+                            entityId: string;
+                            conflictingEntityId?: string;
+                            message: string;
+                            correctiveAction: string;
+                            vertexIndex?: number;
+                            edgeIndex?: number;
+                            details?: {
+                                [key: string]: unknown;
+                            };
+                        }[];
                     };
                 };
             };
@@ -4079,7 +4778,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
+                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "published_revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
                     };
                 };
             };
@@ -4091,7 +4790,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -4186,7 +4885,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
+                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "published_revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
                     };
                 };
             };
@@ -4198,7 +4897,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -4291,6 +4990,22 @@ export interface operations {
                             vertexIndex?: number;
                             edgeIndex?: number;
                         }[];
+                        validationErrors?: {
+                            code: string;
+                            /** @enum {string} */
+                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE";
+                            /** @enum {string} */
+                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR";
+                            entityId: string;
+                            conflictingEntityId?: string;
+                            message: string;
+                            correctiveAction: string;
+                            vertexIndex?: number;
+                            edgeIndex?: number;
+                            details?: {
+                                [key: string]: unknown;
+                            };
+                        }[];
                     };
                 };
             };
@@ -4326,7 +5041,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
+                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "published_revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
                     };
                 };
             };
@@ -4338,7 +5053,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -4392,6 +5107,22 @@ export interface operations {
                             vertexIndex?: number;
                             edgeIndex?: number;
                         }[];
+                        validationErrors?: {
+                            code: string;
+                            /** @enum {string} */
+                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE";
+                            /** @enum {string} */
+                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR";
+                            entityId: string;
+                            conflictingEntityId?: string;
+                            message: string;
+                            correctiveAction: string;
+                            vertexIndex?: number;
+                            edgeIndex?: number;
+                            details?: {
+                                [key: string]: unknown;
+                            };
+                        }[];
                     };
                 };
             };
@@ -4427,7 +5158,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
+                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "published_revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
                     };
                 };
             };
@@ -4439,7 +5170,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -4530,6 +5261,22 @@ export interface operations {
                             vertexIndex?: number;
                             edgeIndex?: number;
                         }[];
+                        validationErrors?: {
+                            code: string;
+                            /** @enum {string} */
+                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE";
+                            /** @enum {string} */
+                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR";
+                            entityId: string;
+                            conflictingEntityId?: string;
+                            message: string;
+                            correctiveAction: string;
+                            vertexIndex?: number;
+                            edgeIndex?: number;
+                            details?: {
+                                [key: string]: unknown;
+                            };
+                        }[];
                     };
                 };
             };
@@ -4565,7 +5312,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
+                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "published_revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
                     };
                 };
             };
@@ -4577,7 +5324,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -5344,6 +6091,243 @@ export interface operations {
                     "application/json": {
                         /** @enum {string} */
                         error: "category_code_taken" | "category_archived" | "template_code_taken" | "template_archived";
+                    };
+                };
+            };
+        };
+    };
+    previewEmployeeWorkbook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Employee import preview metadata and summary counts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id: string;
+                        originalFilename: string;
+                        fileSha256: string;
+                        /** @enum {string} */
+                        status: "VALIDATING" | "INVALID" | "READY" | "APPLYING" | "APPLIED" | "FAILED";
+                        totalRows: number;
+                        validRows: number;
+                        invalidRows: number;
+                        createCount: number;
+                        updateCount: number;
+                        unchangedCount: number;
+                        invalidCount: number;
+                        createdAt: string;
+                        appliedAt: string | null;
+                    };
+                };
+            };
+            /** @description Workbook validation or upload structure error. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: string;
+                        message?: string;
+                    };
+                };
+            };
+            /** @description Not authenticated or session expired/revoked. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "unauthorized";
+                    };
+                };
+            };
+            /** @description Authenticated but missing the Workplace Planner role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "forbidden";
+                    };
+                };
+            };
+        };
+    };
+    getEmployeeImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                importId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Employee import preview metadata and summary counts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id: string;
+                        originalFilename: string;
+                        fileSha256: string;
+                        /** @enum {string} */
+                        status: "VALIDATING" | "INVALID" | "READY" | "APPLYING" | "APPLIED" | "FAILED";
+                        totalRows: number;
+                        validRows: number;
+                        invalidRows: number;
+                        createCount: number;
+                        updateCount: number;
+                        unchangedCount: number;
+                        invalidCount: number;
+                        createdAt: string;
+                        appliedAt: string | null;
+                    };
+                };
+            };
+            /** @description Not authenticated or session expired/revoked. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "unauthorized";
+                    };
+                };
+            };
+            /** @description Authenticated but missing the Workplace Planner role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "forbidden";
+                    };
+                };
+            };
+            /** @description The requested employee import was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "not_found";
+                    };
+                };
+            };
+        };
+    };
+    listEmployeeImportRows: {
+        parameters: {
+            query?: {
+                action?: "ALL" | "CREATE" | "UPDATE" | "UNCHANGED" | "INVALID";
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                importId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated staging rows for an employee import. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        importId: string;
+                        totalRows: number;
+                        rows: {
+                            /** Format: uuid */
+                            id: string;
+                            rowNumber: number;
+                            /** @enum {string} */
+                            action: "CREATE" | "UPDATE" | "UNCHANGED" | "INVALID";
+                            isValid: boolean;
+                            employeeId: string | null;
+                            fullName: string | null;
+                            email: string | null;
+                            employmentStatus: string | null;
+                            managerEmployeeId: string | null;
+                            teamCode: string | null;
+                            teamName: string | null;
+                            departmentCode: string | null;
+                            departmentName: string | null;
+                            preferredSiteCode: string | null;
+                            jobTitle: string | null;
+                            active: boolean | null;
+                            errors: {
+                                columnName: string | null;
+                                errorCode: string;
+                                message: string;
+                            }[];
+                        }[];
+                    };
+                };
+            };
+            /** @description Not authenticated or session expired/revoked. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "unauthorized";
+                    };
+                };
+            };
+            /** @description Authenticated but missing the Workplace Planner role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "forbidden";
+                    };
+                };
+            };
+            /** @description The requested employee import was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "not_found";
                     };
                 };
             };

@@ -1646,4 +1646,587 @@ describe('BoundaryEditor', () => {
       expect(screen.queryByText('(37, 43)')).not.toBeInTheDocument();
     });
   });
+
+  describe('Ticket 18: preview publication validation', () => {
+    const revisionWithPlacements: FloorPlanRevision = {
+      ...sampleDraftRevision,
+      concurrencyVersion: 3,
+      placements: [
+        {
+          id: 'pl-val-1',
+          floorPlanRevisionId: 'rev-draft-1',
+          placementIdentityId: 'pi-1',
+          elementTemplateRevisionId: 'rev-phys-1',
+          templateId: 'tmpl-1',
+          templateCode: 'DESK-STD',
+          templateName: 'Standard Desk',
+          templateRevisionNumber: 1,
+          assignable: true,
+          spatialClass: 'PHYSICAL',
+          positionX: 50,
+          positionY: 60,
+          rotationDegrees: 0,
+          label: 'Desk 1',
+          vertices: [
+            { x: 50, y: 60 },
+            { x: 70, y: 60 },
+            { x: 70, y: 80 },
+            { x: 50, y: 80 },
+          ],
+          localVertices: [
+            { x: 0, y: 0 },
+            { x: 20, y: 0 },
+            { x: 20, y: 20 },
+            { x: 0, y: 20 },
+          ],
+          fillColor: '#93c5fd',
+          borderColor: '#1e3a8a',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ],
+    };
+
+    it('renders Validate for Publication button for Facilities Admin on Draft revisions and hides it for read-only roles', () => {
+      // Facilities Admin on Draft -> button is rendered
+      const { unmount } = render(
+        <BoundaryEditor
+          floorId="floor-1"
+          revision={sampleDraftRevision}
+          canMutate={true}
+          onRevisionUpdated={() => undefined}
+          onError={() => undefined}
+        />,
+      );
+
+      const validateBtn = screen.getByTestId('validate-publication-button');
+      expect(validateBtn).toBeInTheDocument();
+      expect(validateBtn).toHaveTextContent('Validate for Publication');
+      expect(validateBtn).toBeEnabled();
+
+      unmount();
+
+      // Non-Facilities (canMutate = false) -> button is NOT rendered
+      render(
+        <BoundaryEditor
+          floorId="floor-1"
+          revision={sampleDraftRevision}
+          canMutate={false}
+          onRevisionUpdated={() => undefined}
+          onError={() => undefined}
+        />,
+      );
+
+      expect(screen.queryByTestId('validate-publication-button')).not.toBeInTheDocument();
+    });
+
+    it('displays explicit publication-ready result when draft passes validation', async () => {
+      post.mockImplementation(async (path: string) => {
+        if (path.includes('/lease')) {
+          return {
+            data: {
+              floorPlanRevisionId: 'rev-draft-1',
+              token: 'tok-1',
+              acquiredAt: new Date().toISOString(),
+              expiresAt: new Date(Date.now() + 60000).toISOString(),
+              renewedAt: new Date().toISOString(),
+              releasedAt: null,
+              isExpired: false,
+              owner: { id: 'usr-1', displayName: 'Facilities Admin', email: 'fac@dskt.local' },
+            },
+            response: jsonResponse(200),
+          };
+        }
+        if (path.includes('/validate')) {
+          return {
+            data: {
+              isValid: true,
+              ready: true,
+              floorId: 'floor-1',
+              revisionId: 'rev-draft-1',
+              concurrencyVersion: 3,
+              summary: 'Draft revision is valid and ready for publication.',
+              errors: [],
+              warnings: [],
+            },
+            response: jsonResponse(200),
+          };
+        }
+        return { data: null, response: jsonResponse(404) };
+      });
+
+      render(
+        <BoundaryEditor
+          floorId="floor-1"
+          revision={revisionWithPlacements}
+          canMutate={true}
+          onRevisionUpdated={() => undefined}
+          onError={() => undefined}
+        />,
+      );
+
+      const validateBtn = screen.getByTestId('validate-publication-button');
+      fireEvent.click(validateBtn);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('publication-ready-banner')).toBeInTheDocument();
+      });
+
+      const readyBanner = screen.getByTestId('publication-ready-banner');
+      expect(readyBanner).toHaveTextContent('Publication Ready');
+      expect(readyBanner).toHaveTextContent('Draft revision is valid and ready for publication.');
+      expect(readyBanner).toHaveTextContent('concurrency version 3');
+
+      // Dismiss clears the banner
+      fireEvent.click(screen.getByTestId('dismiss-publication-ready-btn'));
+      expect(screen.queryByTestId('publication-ready-banner')).not.toBeInTheDocument();
+    });
+
+    it('groups errors accessibly and allows focusing the affected map object or properties panel', async () => {
+      post.mockImplementation(async (path: string) => {
+        if (path.includes('/lease')) {
+          return {
+            data: {
+              floorPlanRevisionId: 'rev-draft-1',
+              token: 'tok-1',
+              acquiredAt: new Date().toISOString(),
+              expiresAt: new Date(Date.now() + 60000).toISOString(),
+              renewedAt: new Date().toISOString(),
+              releasedAt: null,
+              isExpired: false,
+              owner: { id: 'usr-1', displayName: 'Facilities Admin', email: 'fac@dskt.local' },
+            },
+            response: jsonResponse(200),
+          };
+        }
+        if (path.includes('/validate')) {
+          return {
+            data: {
+              isValid: false,
+              ready: false,
+              floorId: 'floor-1',
+              revisionId: 'rev-draft-1',
+              concurrencyVersion: 3,
+              summary: 'Validation found 2 blocker(s) preventing publication.',
+              errors: [
+                {
+                  code: 'outside_boundary',
+                  category: 'CONTAINMENT',
+                  entityType: 'PLACEMENT',
+                  entityId: 'pl-val-1',
+                  message: 'Placement "Desk 1" extends outside the floor boundary.',
+                  correctiveAction: 'Move or rotate the space so it is completely contained within the floor boundary.',
+                },
+                {
+                  code: 'missing_boundary',
+                  category: 'BOUNDARY',
+                  entityType: 'BOUNDARY',
+                  entityId: 'rev-draft-1',
+                  message: 'The floor boundary is missing.',
+                  correctiveAction: 'Use the boundary editor to define and save a closed orthogonal floor boundary.',
+                },
+              ],
+              warnings: [],
+            },
+            response: jsonResponse(200),
+          };
+        }
+        return { data: null, response: jsonResponse(404) };
+      });
+
+      render(
+        <BoundaryEditor
+          floorId="floor-1"
+          revision={revisionWithPlacements}
+          canMutate={true}
+          onRevisionUpdated={() => undefined}
+          onError={() => undefined}
+        />,
+      );
+
+      fireEvent.click(screen.getByTestId('validate-publication-button'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('publication-validation-panel')).toBeInTheDocument();
+      });
+
+      // Panel displays blockers count badge and summary
+      expect(screen.getByTestId('blocker-count-badge')).toHaveTextContent('2 Blocker(s)');
+      expect(screen.getByTestId('validation-summary')).toHaveTextContent(
+        'Validation found 2 blocker(s) preventing publication.',
+      );
+
+      // Accessibly grouped categories
+      expect(screen.getByTestId('category-group-containment')).toBeInTheDocument();
+      expect(screen.getByTestId('category-group-boundary')).toBeInTheDocument();
+
+      // Error items have code and actionable advice
+      const errorItems = screen.getAllByTestId('validation-error-item');
+      expect(errorItems).toHaveLength(2);
+      expect(errorItems[0]).toHaveTextContent('outside_boundary');
+      expect(errorItems[0]).toHaveTextContent('Action: Move or rotate the space');
+
+      // Click "Focus Placed Space" focuses the affected placement and opens details panel
+      const focusBtn = screen.getByTestId('focus-placement-pl-val-1');
+      fireEvent.click(focusBtn);
+
+      // Placement details panel opens
+      expect(screen.getByTestId('placement-details-panel')).toBeInTheDocument();
+      expect(screen.getByTestId('placement-details-panel')).toHaveTextContent('Standard Desk');
+
+      // Focus boundary button focuses boundary
+      const focusBoundaryBtn = screen.getByTestId('focus-boundary-button');
+      fireEvent.click(focusBoundaryBtn);
+      // Selected placement is cleared when focusing boundary
+      expect(screen.queryByTestId('placement-details-panel')).not.toBeInTheDocument();
+
+      // Close button dismisses validation panel
+      fireEvent.click(screen.getByTestId('close-validation-panel-btn'));
+      expect(screen.queryByTestId('publication-validation-panel')).not.toBeInTheDocument();
+    });
+
+    it('triggers conflict banner when validation detects a stale concurrency version', async () => {
+      post.mockImplementation(async (path: string) => {
+        if (path.includes('/lease')) {
+          return {
+            data: {
+              floorPlanRevisionId: 'rev-draft-1',
+              token: 'tok-1',
+              acquiredAt: new Date().toISOString(),
+              expiresAt: new Date(Date.now() + 60000).toISOString(),
+              renewedAt: new Date().toISOString(),
+              releasedAt: null,
+              isExpired: false,
+              owner: { id: 'usr-1', displayName: 'Facilities Admin', email: 'fac@dskt.local' },
+            },
+            response: jsonResponse(200),
+          };
+        }
+        if (path.includes('/validate')) {
+          return {
+            data: {
+              error: 'concurrency_conflict',
+              currentConcurrencyVersion: 6,
+            },
+            response: jsonResponse(409),
+          };
+        }
+        return { data: null, response: jsonResponse(404) };
+      });
+
+      render(
+        <BoundaryEditor
+          floorId="floor-1"
+          revision={revisionWithPlacements}
+          canMutate={true}
+          onRevisionUpdated={() => undefined}
+          onError={() => undefined}
+        />,
+      );
+
+      fireEvent.click(screen.getByTestId('validate-publication-button'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('concurrency-conflict-banner')).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId('reload-server-draft-button')).toBeInTheDocument();
+    });
+  });
+
+  describe('Ticket 19: Publish a Floor Plan', () => {
+    it('transitions from ready banner to confirmation modal and publishes floor plan', async () => {
+      const onRevisionUpdated = vi.fn();
+      post.mockImplementation(async (path: string) => {
+        if (path.includes('/lease')) {
+          return {
+            data: {
+              floorPlanRevisionId: 'rev-draft-1',
+              token: 'tok-pub-1',
+              acquiredAt: new Date().toISOString(),
+              expiresAt: new Date(Date.now() + 60000).toISOString(),
+              renewedAt: new Date().toISOString(),
+              releasedAt: null,
+              isExpired: false,
+              owner: { id: 'usr-1', displayName: 'Facilities Admin', email: 'fac@dskt.local' },
+            },
+            response: jsonResponse(200),
+          };
+        }
+        if (path.includes('/validate')) {
+          return {
+            data: {
+              isValid: true,
+              ready: true,
+              floorId: 'floor-1',
+              revisionId: 'rev-draft-1',
+              concurrencyVersion: 5,
+              summary: 'Draft revision is valid and ready for publication.',
+              errors: [],
+              warnings: [],
+            },
+            response: jsonResponse(200),
+          };
+        }
+        if (path.includes('/publish')) {
+          return {
+            data: {
+              revision: {
+                ...sampleDraftRevision,
+                lifecycleState: 'PUBLISHED',
+                concurrencyVersion: 6,
+                publishedAt: new Date().toISOString(),
+              },
+            },
+            response: jsonResponse(200),
+          };
+        }
+        return { data: null, response: jsonResponse(404) };
+      });
+
+      render(
+        <BoundaryEditor
+          floorId="floor-1"
+          revision={sampleDraftRevision}
+          canMutate={true}
+          onRevisionUpdated={onRevisionUpdated}
+          onError={() => undefined}
+        />,
+      );
+
+      // 1. Validate for publication -> ready banner appears
+      fireEvent.click(screen.getByTestId('validate-publication-button'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('publication-ready-banner')).toBeInTheDocument();
+      });
+
+      // 2. Publish button is visible in ready banner
+      const publishBtn = screen.getByTestId('publish-floor-plan-button');
+      expect(publishBtn).toBeInTheDocument();
+
+      // 3. Click Publish -> confirmation dialog appears
+      fireEvent.click(publishBtn);
+      expect(screen.getByTestId('publication-confirm-dialog')).toBeInTheDocument();
+      expect(screen.getByText('Confirm Publication')).toBeInTheDocument();
+
+      // 4. Test cancel button dismisses modal
+      const cancelBtn = screen.getByTestId('cancel-publish-btn');
+      fireEvent.click(cancelBtn);
+      expect(screen.queryByTestId('publication-confirm-dialog')).not.toBeInTheDocument();
+
+      // 5. Open confirm dialog again and click Confirm & Publish
+      fireEvent.click(screen.getByTestId('publish-floor-plan-button'));
+      const confirmSubmitBtn = screen.getByTestId('confirm-publish-submit-btn');
+      fireEvent.click(confirmSubmitBtn);
+
+      // 6. Verify publish API called and onRevisionUpdated invoked
+      await waitFor(() => {
+        expect(post).toHaveBeenCalledWith(
+          '/floors/{floorId}/floor-plan/revisions/{revisionId}/publish',
+          expect.objectContaining({
+            params: expect.objectContaining({
+              path: { floorId: 'floor-1', revisionId: 'rev-draft-1' },
+            }),
+            body: expect.objectContaining({
+              concurrencyVersion: sampleDraftRevision.concurrencyVersion,
+            }),
+          }),
+        );
+      });
+
+      expect(onRevisionUpdated).toHaveBeenCalledWith(
+        expect.objectContaining({
+          lifecycleState: 'PUBLISHED',
+          concurrencyVersion: 6,
+        }),
+      );
+
+      // Success banner appears
+      await waitFor(() => {
+        expect(screen.getByTestId('publication-success-banner')).toBeInTheDocument();
+      });
+      expect(screen.getByText(/Floor Plan Published Successfully/i)).toBeInTheDocument();
+    });
+
+    it('renders read-only Published view when revision is PUBLISHED and hides editing controls', () => {
+      const publishedRevision: FloorPlanRevision = {
+        ...sampleDraftRevision,
+        lifecycleState: 'PUBLISHED',
+        concurrencyVersion: 6,
+      };
+
+      render(
+        <BoundaryEditor
+          floorId="floor-1"
+          revision={publishedRevision}
+          canMutate={true}
+          onRevisionUpdated={() => undefined}
+          onError={() => undefined}
+        />,
+      );
+
+      // Published banner is displayed
+      expect(screen.getByTestId('published-revision-banner')).toBeInTheDocument();
+      expect(screen.getByTestId('published-badge')).toHaveTextContent('Revision 1 (Published)');
+      expect(
+        screen.getByText(/This floor plan revision is published and immutable/i),
+      ).toBeInTheDocument();
+
+      // Mutation controls are absent
+      expect(screen.queryByTestId('validate-publication-button')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('catalog-palette')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('undo-button')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('redo-button')).not.toBeInTheDocument();
+    });
+
+    it('handles concurrency conflict during publication', async () => {
+      post.mockImplementation(async (path: string) => {
+        if (path.includes('/lease')) {
+          return {
+            data: {
+              floorPlanRevisionId: 'rev-draft-1',
+              token: 'tok-pub-1',
+              acquiredAt: new Date().toISOString(),
+              expiresAt: new Date(Date.now() + 60000).toISOString(),
+              renewedAt: new Date().toISOString(),
+              releasedAt: null,
+              isExpired: false,
+              owner: { id: 'usr-1', displayName: 'Facilities Admin', email: 'fac@dskt.local' },
+            },
+            response: jsonResponse(200),
+          };
+        }
+        if (path.includes('/validate')) {
+          return {
+            data: {
+              isValid: true,
+              ready: true,
+              floorId: 'floor-1',
+              revisionId: 'rev-draft-1',
+              concurrencyVersion: 5,
+              summary: 'Draft revision is valid and ready for publication.',
+              errors: [],
+              warnings: [],
+            },
+            response: jsonResponse(200),
+          };
+        }
+        if (path.includes('/publish')) {
+          return {
+            data: {
+              error: 'concurrency_conflict',
+              currentConcurrencyVersion: 7,
+            },
+            response: jsonResponse(409),
+          };
+        }
+        return { data: null, response: jsonResponse(404) };
+      });
+
+      render(
+        <BoundaryEditor
+          floorId="floor-1"
+          revision={sampleDraftRevision}
+          canMutate={true}
+          onRevisionUpdated={() => undefined}
+          onError={() => undefined}
+        />,
+      );
+
+      fireEvent.click(screen.getByTestId('validate-publication-button'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('publication-ready-banner')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId('publish-floor-plan-button'));
+      fireEvent.click(screen.getByTestId('confirm-publish-submit-btn'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('concurrency-conflict-banner')).toBeInTheDocument();
+      });
+      expect(screen.getByTestId('reload-server-draft-button')).toBeInTheDocument();
+    });
+
+    it('handles validation blockers returned by publication endpoint', async () => {
+      post.mockImplementation(async (path: string) => {
+        if (path.includes('/lease')) {
+          return {
+            data: {
+              floorPlanRevisionId: 'rev-draft-1',
+              token: 'tok-pub-1',
+              acquiredAt: new Date().toISOString(),
+              expiresAt: new Date(Date.now() + 60000).toISOString(),
+              renewedAt: new Date().toISOString(),
+              releasedAt: null,
+              isExpired: false,
+              owner: { id: 'usr-1', displayName: 'Facilities Admin', email: 'fac@dskt.local' },
+            },
+            response: jsonResponse(200),
+          };
+        }
+        if (path.includes('/validate')) {
+          return {
+            data: {
+              isValid: true,
+              ready: true,
+              floorId: 'floor-1',
+              revisionId: 'rev-draft-1',
+              concurrencyVersion: 5,
+              summary: 'Draft revision is valid and ready for publication.',
+              errors: [],
+              warnings: [],
+            },
+            response: jsonResponse(200),
+          };
+        }
+        if (path.includes('/publish')) {
+          return {
+            data: {
+              error: 'publication_validation_failed',
+              validationErrors: [
+                {
+                  code: 'missing_boundary',
+                  category: 'BOUNDARY',
+                  entityType: 'BOUNDARY',
+                  entityId: 'rev-draft-1',
+                  message: 'The floor boundary is missing.',
+                  correctiveAction: 'Use the boundary editor to define a boundary.',
+                },
+              ],
+            },
+            response: jsonResponse(400),
+          };
+        }
+        return { data: null, response: jsonResponse(404) };
+      });
+
+      render(
+        <BoundaryEditor
+          floorId="floor-1"
+          revision={sampleDraftRevision}
+          canMutate={true}
+          onRevisionUpdated={() => undefined}
+          onError={() => undefined}
+        />,
+      );
+
+      fireEvent.click(screen.getByTestId('validate-publication-button'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('publication-ready-banner')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId('publish-floor-plan-button'));
+      fireEvent.click(screen.getByTestId('confirm-publish-submit-btn'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('publication-validation-panel')).toBeInTheDocument();
+      });
+      expect(screen.getByTestId('blocker-count-badge')).toHaveTextContent('1 Blocker(s)');
+      expect(screen.getByTestId('category-group-boundary')).toBeInTheDocument();
+    });
+  });
 });
+

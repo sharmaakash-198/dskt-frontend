@@ -196,6 +196,9 @@ describe('SitesPanel', () => {
       if (path === '/sites') {
         return Promise.resolve({ data: { sites: [site()] }, response: jsonResponse(200) });
       }
+      if (String(path).includes('/floor-plan')) {
+        return Promise.resolve({ data: { revisions: [], floorPlan: null, activeRevision: null, publishedRevision: null }, response: jsonResponse(200) });
+      }
       if (String(path).includes('/floors')) {
         return Promise.resolve({ data: { floors: [floor] }, response: jsonResponse(200) });
       }
