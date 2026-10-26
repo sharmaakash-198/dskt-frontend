@@ -1,8 +1,9 @@
-import { useState, useEffect, type ChangeEvent, type FormEvent } from 'react';
+import { useState, useEffect, useRef, type ChangeEvent, type FormEvent } from 'react';
 import { api } from '../api/client';
 import {
   uploadWorkbookPreview,
   listImportRows,
+  confirmEmployeeImport,
   type EmployeeImportSummary,
   type EmployeeImportRow,
 } from './api';
@@ -23,6 +24,15 @@ export function EmployeeImportPanel({ canImport = true }: EmployeeImportPanelPro
   const [loadingRows, setLoadingRows] = useState(false);
   const [rowsTotal, setRowsTotal] = useState(0);
 
+  // Row navigation state
+  const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null);
+  const rowRefs = useRef<Map<number, HTMLTableRowElement>>(new Map());
+
+  // Confirmation state
+  const [confirming, setConfirming] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+  const [confirmSuccess, setConfirmSuccess] = useState(false);
+
   // Load preview rows whenever summary or filter changes
   useEffect(() => {
     if (!summary) {
@@ -41,6 +51,7 @@ export function EmployeeImportPanel({ canImport = true }: EmployeeImportPanelPro
       if (result.ok) {
         setRows(result.data.rows);
         setRowsTotal(result.data.totalRows);
+        setSelectedRowIndex(result.data.rows.length > 0 ? 0 : null);
       } else {
         setErrorMessage(result.error);
       }
@@ -54,8 +65,8 @@ export function EmployeeImportPanel({ canImport = true }: EmployeeImportPanelPro
   function changeFilter(filter: FilterAction) {
     setActiveFilter(filter);
     setLoadingRows(true);
+    setSelectedRowIndex(null);
   }
-
 
   function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -74,6 +85,8 @@ export function EmployeeImportPanel({ canImport = true }: EmployeeImportPanelPro
 
     setUploading(true);
     setErrorMessage(null);
+    setConfirmError(null);
+    setConfirmSuccess(false);
 
     const result = await uploadWorkbookPreview(selectedFile);
     setUploading(false);
@@ -92,6 +105,66 @@ export function EmployeeImportPanel({ canImport = true }: EmployeeImportPanelPro
     setErrorMessage(null);
     setActiveFilter('ALL');
     setRows([]);
+    setSelectedRowIndex(null);
+    setConfirmError(null);
+    setConfirmSuccess(false);
+  }
+
+  function selectRow(index: number) {
+    if (index >= 0 && index < rows.length) {
+      setSelectedRowIndex(index);
+      const el = rowRefs.current.get(index);
+      if (el) {
+        el.focus();
+      }
+    }
+  }
+
+  function handlePrevRow() {
+    if (selectedRowIndex !== null && selectedRowIndex > 0) {
+      selectRow(selectedRowIndex - 1);
+    }
+  }
+
+  function handleNextRow() {
+    if (selectedRowIndex !== null && selectedRowIndex < rows.length - 1) {
+      selectRow(selectedRowIndex + 1);
+    }
+  }
+
+  function handleNextInvalidRow() {
+    const startIndex = selectedRowIndex !== null ? selectedRowIndex + 1 : 0;
+    const nextIdx = rows.findIndex((r, idx) => idx >= startIndex && !r.isValid);
+    if (nextIdx !== -1) {
+      selectRow(nextIdx);
+    } else {
+      // Wrap around to start if any
+      const wrapIdx = rows.findIndex((r) => !r.isValid);
+      if (wrapIdx !== -1) {
+        selectRow(wrapIdx);
+      }
+    }
+  }
+
+  async function handleConfirm() {
+    if (!summary) return;
+    if (summary.invalidCount > 0 || summary.status === 'INVALID') {
+      setConfirmError('An import with blocking errors cannot be confirmed. Resolve all diagnostics before confirmation.');
+      return;
+    }
+
+    setConfirming(true);
+    setConfirmError(null);
+
+    const result = await confirmEmployeeImport(api, summary.id);
+    setConfirming(false);
+
+    if (result.ok) {
+      setSummary(result.summary);
+      setConfirmSuccess(true);
+    } else {
+      setConfirmError(result.error);
+    }
   }
 
   if (!canImport) {
@@ -104,6 +177,9 @@ export function EmployeeImportPanel({ canImport = true }: EmployeeImportPanelPro
       </section>
     );
   }
+
+  const selectedRow = selectedRowIndex !== null ? rows[selectedRowIndex] : null;
+  const hasInvalidRowsInView = rows.some((r) => !r.isValid);
 
   return (
     <section className="session-card" aria-label="Employee workbook import">
@@ -217,6 +293,24 @@ export function EmployeeImportPanel({ canImport = true }: EmployeeImportPanelPro
             </div>
           </div>
 
+          {/* Diagnostics Callout if Invalid Rows Detected */}
+          {summary.invalidCount > 0 && (
+            <div className="validation-error-callout error-alert" role="alert">
+              <div>
+                <strong>Blocking errors detected:</strong> {summary.invalidCount} invalid row(s)
+                prevent import confirmation. All blocking errors must be resolved before changes can
+                be applied.
+              </div>
+              <button
+                type="button"
+                className="secondary-button mt-2"
+                onClick={() => changeFilter('INVALID')}
+              >
+                Filter to invalid rows ({summary.invalidCount})
+              </button>
+            </div>
+          )}
+
           {/* Filter Tabs */}
           <div className="filter-tabs" role="tablist" aria-label="Filter preview rows by action">
             <button
@@ -264,8 +358,54 @@ export function EmployeeImportPanel({ canImport = true }: EmployeeImportPanelPro
             >
               Invalid ({summary.invalidCount})
             </button>
-
           </div>
+
+          {/* Accessible Row Navigation Toolbar */}
+          {rows.length > 0 && (
+            <div className="row-navigation-toolbar" aria-label="Row navigation">
+              <div className="navigation-status mono" aria-live="polite">
+                {selectedRow ? (
+                  <span>
+                    Row {selectedRow.rowNumber}:{' '}
+                    <strong>{selectedRow.fullName ?? selectedRow.employeeId ?? 'Row'}</strong> [
+                    {selectedRow.action}]
+                    {selectedRow.errors.length > 0 && ` — ${selectedRow.errors.length} error(s)`}
+                  </span>
+                ) : (
+                  <span>No row selected</span>
+                )}
+              </div>
+              <div className="nav-buttons-group">
+                <button
+                  type="button"
+                  className="secondary-button btn-sm"
+                  aria-label="Previous row"
+                  disabled={selectedRowIndex === null || selectedRowIndex <= 0}
+                  onClick={handlePrevRow}
+                >
+                  Previous row
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button btn-sm"
+                  aria-label="Next row"
+                  disabled={selectedRowIndex === null || selectedRowIndex >= rows.length - 1}
+                  onClick={handleNextRow}
+                >
+                  Next row
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button btn-sm"
+                  aria-label="Next invalid row"
+                  disabled={!hasInvalidRowsInView}
+                  onClick={handleNextInvalidRow}
+                >
+                  Next invalid row
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Rows Table */}
           {loadingRows ? (
@@ -293,43 +433,53 @@ export function EmployeeImportPanel({ canImport = true }: EmployeeImportPanelPro
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row) => (
-                    <tr
-                      key={row.id}
-                      className={`row-${row.action.toLowerCase()} ${!row.isValid ? 'row-has-error' : ''}`}
-                    >
-                      <td className="mono">{row.rowNumber}</td>
-                      <td>
-                        <span className={`action-tag action-${row.action.toLowerCase()}`}>
-                          {row.action}
-                        </span>
-                      </td>
-                      <td className="mono font-semibold">{row.employeeId ?? '—'}</td>
-                      <td>{row.fullName ?? '—'}</td>
-                      <td>{row.employmentStatus ?? '—'}</td>
-                      <td>{row.email ?? '—'}</td>
-                      <td>{row.jobTitle ?? '—'}</td>
-                      <td className="mono">{row.managerEmployeeId ?? '—'}</td>
-                      <td>{row.teamCode ?? '—'}</td>
-                      <td>{row.departmentCode ?? '—'}</td>
-                      <td className="mono">{row.preferredSiteCode ?? '—'}</td>
-                      <td>{row.active ? 'Yes' : 'No'}</td>
-                      <td>
-                        {row.errors.length > 0 ? (
-                          <ul className="row-errors-list">
-                            {row.errors.map((err, idx) => (
-                              <li key={idx} className="error-item">
-                                {err.columnName && <strong>[{err.columnName}] </strong>}
-                                <span>{err.message}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <span className="valid-pill">Valid</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                  {rows.map((row, index) => {
+                    const isSelected = selectedRowIndex === index;
+                    return (
+                      <tr
+                        key={row.id}
+                        ref={(el) => {
+                          if (el) rowRefs.current.set(index, el);
+                          else rowRefs.current.delete(index);
+                        }}
+                        tabIndex={isSelected ? 0 : -1}
+                        aria-current={isSelected ? 'true' : undefined}
+                        onClick={() => selectRow(index)}
+                        className={`row-${row.action.toLowerCase()} ${!row.isValid ? 'row-has-error' : ''} ${isSelected ? 'row-selected' : ''}`}
+                      >
+                        <td className="mono">{row.rowNumber}</td>
+                        <td>
+                          <span className={`action-tag action-${row.action.toLowerCase()}`}>
+                            {row.action}
+                          </span>
+                        </td>
+                        <td className="mono font-semibold">{row.employeeId ?? '—'}</td>
+                        <td>{row.fullName ?? '—'}</td>
+                        <td>{row.employmentStatus ?? '—'}</td>
+                        <td>{row.email ?? '—'}</td>
+                        <td>{row.jobTitle ?? '—'}</td>
+                        <td className="mono">{row.managerEmployeeId ?? '—'}</td>
+                        <td>{row.teamCode ?? '—'}</td>
+                        <td>{row.departmentCode ?? '—'}</td>
+                        <td className="mono">{row.preferredSiteCode ?? '—'}</td>
+                        <td>{row.active ? 'Yes' : 'No'}</td>
+                        <td>
+                          {row.errors.length > 0 ? (
+                            <ul className="row-errors-list">
+                              {row.errors.map((err, idx) => (
+                                <li key={idx} className="error-item">
+                                  {err.columnName && <strong>[{err.columnName}] </strong>}
+                                  <span>{err.message}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <span className="valid-pill">Valid</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -338,6 +488,43 @@ export function EmployeeImportPanel({ canImport = true }: EmployeeImportPanelPro
           <p className="table-footer-info">
             Showing {rows.length} of {rowsTotal} rows
           </p>
+
+          {/* Confirmation Section & Denial */}
+          <div className="confirmation-card mt-4 p-4 border rounded">
+            <h3>Import Confirmation</h3>
+            {summary.invalidCount > 0 ? (
+              <p className="confirmation-denied-note" role="alert">
+                An import with blocking errors cannot be confirmed. Resolve all diagnostics before
+                confirmation.
+              </p>
+            ) : (
+              <p className="confirmation-ready-note">
+                All rows are valid. You can now confirm this import to apply proposed changes atomically.
+              </p>
+            )}
+
+            {confirmError && (
+              <div className="error-alert mb-2" role="alert">
+                {confirmError}
+              </div>
+            )}
+
+            {confirmSuccess && (
+              <div className="success-alert mb-2" role="status">
+                Import confirmed successfully.
+              </div>
+            )}
+
+            <button
+              type="button"
+              className="primary-button"
+              disabled={summary.invalidCount > 0 || confirming || confirmSuccess}
+              aria-disabled={summary.invalidCount > 0}
+              onClick={handleConfirm}
+            >
+              {confirming ? 'Confirming import...' : 'Confirm Import'}
+            </button>
+          </div>
         </div>
       )}
     </section>

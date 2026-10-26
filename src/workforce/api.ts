@@ -61,6 +61,9 @@ const ERROR_COPY: Record<string, string> = {
   forbidden: 'Only Workplace Planners can upload and preview employee workbooks.',
   unauthorized: 'Your session has expired. Please sign in again.',
   not_found: 'Employee import preview was not found.',
+  cannot_confirm_invalid_import: 'An import with blocking errors cannot be confirmed.',
+  import_not_ready: 'Import is not in a ready state for confirmation.',
+  already_applied: 'Import has already been applied.',
 };
 
 export function workforceErrorMessage(data: unknown, fallback: string): string {
@@ -142,5 +145,22 @@ export async function listImportRows(
     return { ok: false, error: workforceErrorMessage(data, 'Could not list preview rows.') };
   } catch {
     return { ok: false, error: 'Could not list preview rows.' };
+  }
+}
+
+export async function confirmEmployeeImport(
+  client: Client<paths>,
+  importId: string,
+): Promise<{ ok: true; summary: EmployeeImportSummary } | { ok: false; error: string }> {
+  try {
+    const { data, response } = await client.POST('/employee-imports/{importId}/confirm', {
+      params: { path: { importId } },
+    });
+    if (response.ok && data) {
+      return { ok: true, summary: data as EmployeeImportSummary };
+    }
+    return { ok: false, error: workforceErrorMessage(data, 'Could not confirm import.') };
+  } catch {
+    return { ok: false, error: 'Could not confirm import. Network or server error.' };
   }
 }

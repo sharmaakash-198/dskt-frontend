@@ -928,6 +928,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/employee-imports/{importId}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm employee import
+         * @description Confirm a ready employee import preview. Denies confirmation if the import has any blocking errors.
+         */
+        post: operations["confirmEmployeeImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health/live": {
         parameters: {
             query?: never;
@@ -6292,6 +6312,92 @@ export interface operations {
                                 message: string;
                             }[];
                         }[];
+                    };
+                };
+            };
+            /** @description Not authenticated or session expired/revoked. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "unauthorized";
+                    };
+                };
+            };
+            /** @description Authenticated but missing the Workplace Planner role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "forbidden";
+                    };
+                };
+            };
+            /** @description The requested employee import was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "not_found";
+                    };
+                };
+            };
+        };
+    };
+    confirmEmployeeImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                importId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Employee import preview metadata and summary counts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id: string;
+                        originalFilename: string;
+                        fileSha256: string;
+                        /** @enum {string} */
+                        status: "VALIDATING" | "INVALID" | "READY" | "APPLYING" | "APPLIED" | "FAILED";
+                        totalRows: number;
+                        validRows: number;
+                        invalidRows: number;
+                        createCount: number;
+                        updateCount: number;
+                        unchangedCount: number;
+                        invalidCount: number;
+                        createdAt: string;
+                        appliedAt: string | null;
+                    };
+                };
+            };
+            /** @description Workbook validation or upload structure error. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: string;
+                        message?: string;
                     };
                 };
             };
