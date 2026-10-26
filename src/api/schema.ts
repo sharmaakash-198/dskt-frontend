@@ -939,7 +939,7 @@ export interface paths {
         put?: never;
         /**
          * Confirm employee import
-         * @description Confirm a ready employee import preview. Denies confirmation if the import has any blocking errors.
+         * @description Confirm a ready employee import preview and atomically apply all proposed employee changes. Rejects invalid, stale, or already applied imports.
          */
         post: operations["confirmEmployeeImport"];
         delete?: never;
@@ -6362,7 +6362,14 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": {
+                    idempotencyKey?: string;
+                    expectedFileSha256?: string;
+                } | null;
+            };
+        };
         responses: {
             /** @description Employee import preview metadata and summary counts. */
             200: {

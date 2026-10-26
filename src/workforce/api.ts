@@ -64,6 +64,7 @@ const ERROR_COPY: Record<string, string> = {
   cannot_confirm_invalid_import: 'An import with blocking errors cannot be confirmed.',
   import_not_ready: 'Import is not in a ready state for confirmation.',
   already_applied: 'Import has already been applied.',
+  stale_preview: 'Preview has changed or is stale. Please generate a fresh preview before confirming.',
 };
 
 export function workforceErrorMessage(data: unknown, fallback: string): string {
@@ -151,10 +152,18 @@ export async function listImportRows(
 export async function confirmEmployeeImport(
   client: Client<paths>,
   importId: string,
+  options?: {
+    idempotencyKey?: string;
+    expectedFileSha256?: string;
+  },
 ): Promise<{ ok: true; summary: EmployeeImportSummary } | { ok: false; error: string }> {
   try {
     const { data, response } = await client.POST('/employee-imports/{importId}/confirm', {
       params: { path: { importId } },
+      body: {
+        idempotencyKey: options?.idempotencyKey,
+        expectedFileSha256: options?.expectedFileSha256,
+      },
     });
     if (response.ok && data) {
       return { ok: true, summary: data as EmployeeImportSummary };

@@ -234,6 +234,7 @@ describe('EmployeeImportPanel', () => {
     postMock.mockResolvedValue({
       data: {
         ...mockSummaryReady,
+        status: 'APPLIED',
         appliedAt: '2026-10-22T20:05:00.000Z',
       },
       response: { ok: true, status: 200 },
@@ -260,8 +261,70 @@ describe('EmployeeImportPanel', () => {
     fireEvent.click(confirmBtn);
 
     await waitFor(() => {
-      expect(screen.getByText('Import confirmed successfully.')).toBeInTheDocument();
+      expect(screen.getByText(/Import confirmed successfully/i)).toBeInTheDocument();
+      expect(screen.getByText('Applied')).toBeInTheDocument();
+      expect(screen.getByText(/Import applied: All proposed employee changes have been applied/i)).toBeInTheDocument();
     });
+
+    expect(postMock).toHaveBeenCalledWith(
+      '/employee-imports/{importId}/confirm',
+      expect.objectContaining({
+        params: { path: { importId: mockSummaryReady.id } },
+        body: { expectedFileSha256: mockSummaryReady.fileSha256 },
+      }),
+    );
+
+    const appliedBtn = screen.getByRole('button', { name: 'Import Applied' });
+    expect(appliedBtn).toBeDisabled();
+  });
+
+  it('displays error alert when confirmation is rejected (e.g. stale preview)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(mockSummaryReady),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    getMock.mockResolvedValue({
+      data: {
+        importId: mockSummaryReady.id,
+        totalRows: 1,
+        rows: [mockRows[0]!],
+      },
+      response: { ok: true, status: 200 },
+    });
+
+    postMock.mockResolvedValue({
+      data: {
+        error: 'stale_preview',
+        message: 'Preview has changed or is stale. Please generate a fresh preview before confirming.',
+      },
+      response: { ok: false, status: 400 },
+    });
+
+    render(<EmployeeImportPanel canImport={true} />);
+
+    const file = new File(['fake-xlsx'], 'synthetic_employees.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    const fileInput = screen.getByLabelText(/Select Excel Workbook/i);
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    fireEvent.click(screen.getByRole('button', { name: /Upload & Preview/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Ready for Review')).toBeInTheDocument();
+    });
+
+    const confirmBtn = screen.getByRole('button', { name: 'Confirm Import' });
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Preview has changed or is stale. Please generate a fresh preview before confirming.',
+      );
+    });
+    expect(confirmBtn).not.toBeDisabled();
   });
 
   it('displays error alert when upload is rejected', async () => {

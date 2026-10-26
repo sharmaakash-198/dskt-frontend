@@ -156,7 +156,9 @@ export function EmployeeImportPanel({ canImport = true }: EmployeeImportPanelPro
     setConfirming(true);
     setConfirmError(null);
 
-    const result = await confirmEmployeeImport(api, summary.id);
+    const result = await confirmEmployeeImport(api, summary.id, {
+      expectedFileSha256: summary.fileSha256,
+    });
     setConfirming(false);
 
     if (result.ok) {
@@ -257,15 +259,32 @@ export function EmployeeImportPanel({ canImport = true }: EmployeeImportPanelPro
               <div>
                 <span className="label">Status:</span>
                 <span
-                  className={`badge ${summary.status === 'READY' ? 'badge-ready' : 'badge-invalid'}`}
+                  className={`badge ${
+                    summary.status === 'APPLIED'
+                      ? 'badge-applied badge-success'
+                      : summary.status === 'READY'
+                        ? 'badge-ready'
+                        : summary.status === 'FAILED'
+                          ? 'badge-failed'
+                          : 'badge-invalid'
+                  }`}
                 >
-                  {summary.status === 'READY' ? 'Ready for Review' : 'Invalid Rows Detected'}
+                  {summary.status === 'APPLIED'
+                    ? 'Applied'
+                    : summary.status === 'READY'
+                      ? 'Ready for Review'
+                      : summary.status === 'FAILED'
+                        ? 'Failed'
+                        : 'Invalid Rows Detected'}
                 </span>
               </div>
             </div>
 
             <div className="preview-notice-banner">
-              <strong>Notice:</strong> This is a staging preview. Domain records remain untouched.
+              <strong>Notice:</strong>{' '}
+              {summary.status === 'APPLIED' || confirmSuccess
+                ? 'Import applied: All proposed employee changes have been applied to the employee directory.'
+                : 'This is a staging preview. Domain records remain untouched until confirmed.'}
             </div>
           </div>
 
@@ -492,7 +511,11 @@ export function EmployeeImportPanel({ canImport = true }: EmployeeImportPanelPro
           {/* Confirmation Section & Denial */}
           <div className="confirmation-card mt-4 p-4 border rounded">
             <h3>Import Confirmation</h3>
-            {summary.invalidCount > 0 ? (
+            {summary.status === 'APPLIED' || confirmSuccess ? (
+              <p className="confirmation-applied-note">
+                Import has been applied. All proposed employee changes have been atomically committed.
+              </p>
+            ) : summary.invalidCount > 0 ? (
               <p className="confirmation-denied-note" role="alert">
                 An import with blocking errors cannot be confirmed. Resolve all diagnostics before
                 confirmation.
@@ -509,20 +532,29 @@ export function EmployeeImportPanel({ canImport = true }: EmployeeImportPanelPro
               </div>
             )}
 
-            {confirmSuccess && (
+            {(confirmSuccess || summary.status === 'APPLIED') && (
               <div className="success-alert mb-2" role="status">
-                Import confirmed successfully.
+                Import confirmed successfully. All proposed employee changes have been applied.
+                {summary.appliedAt && (
+                  <span className="applied-time d-block mt-1">
+                    {' '}Applied at: {new Date(summary.appliedAt).toLocaleString()}
+                  </span>
+                )}
               </div>
             )}
 
             <button
               type="button"
               className="primary-button"
-              disabled={summary.invalidCount > 0 || confirming || confirmSuccess}
-              aria-disabled={summary.invalidCount > 0}
+              disabled={summary.invalidCount > 0 || confirming || confirmSuccess || summary.status === 'APPLIED'}
+              aria-disabled={summary.invalidCount > 0 || summary.status === 'APPLIED' || confirmSuccess}
               onClick={handleConfirm}
             >
-              {confirming ? 'Confirming import...' : 'Confirm Import'}
+              {confirming
+                ? 'Confirming import...'
+                : summary.status === 'APPLIED' || confirmSuccess
+                  ? 'Import Applied'
+                  : 'Confirm Import'}
             </button>
           </div>
         </div>
