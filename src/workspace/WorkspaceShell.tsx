@@ -3,6 +3,7 @@ import { AccessAdminPanel } from '../access-admin/AccessAdminPanel';
 import { api } from '../api/client';
 import { SitesPanel } from '../sites/SitesPanel';
 import { TemplatesCatalog } from '../templates/TemplatesCatalog';
+import { EmployeeDirectoryPanel } from '../workforce/EmployeeDirectoryPanel';
 import { EmployeeImportPanel } from '../workforce/EmployeeImportPanel';
 import {
   enterWorkspace,
@@ -116,6 +117,21 @@ export function WorkspaceShell({
           {entry &&
             (selected === 'facilities' || selected === 'workplace' || selected === 'viewer') && (
               <>
+                <EmployeeDirectoryPanel
+                  canSearch={
+                    session.roles.includes('FACILITIES_ADMIN') ||
+                    session.roles.includes('WORKPLACE_PLANNER') ||
+                    session.roles.includes('VIEWER')
+                  }
+                  isPlanner={session.roles.includes('WORKPLACE_PLANNER')}
+                  role={
+                    session.roles.includes('WORKPLACE_PLANNER')
+                      ? 'WORKPLACE_PLANNER'
+                      : session.roles.includes('VIEWER')
+                        ? 'VIEWER'
+                        : 'FACILITIES_ADMIN'
+                  }
+                />
                 <SitesPanel
                   canMutate={
                     selected === 'facilities' && session.roles.includes('FACILITIES_ADMIN')

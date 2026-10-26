@@ -173,3 +173,126 @@ export async function confirmEmployeeImport(
     return { ok: false, error: 'Could not confirm import. Network or server error.' };
   }
 }
+
+export type EmployeeDepartment = {
+  id: string;
+  code: string;
+  name: string;
+};
+
+export type EmployeeTeam = {
+  id: string;
+  code: string;
+  name: string;
+};
+
+export type EmployeeSite = {
+  id: string;
+  code: string;
+  name: string;
+};
+
+export type EmployeeManager = {
+  employeeId: string;
+  fullName: string;
+};
+
+export type EmployeeDirectoryItem = {
+  id: string;
+  employeeId: string;
+  fullName: string;
+  jobTitle: string | null;
+  department: EmployeeDepartment | null;
+  team: EmployeeTeam | null;
+  preferredSite: EmployeeSite | null;
+  email?: string | null;
+  employmentStatus?: string;
+  active?: boolean;
+  managerEmployeeId?: string | null;
+  manager?: EmployeeManager | null;
+};
+
+export type EmployeeSearchResponse = {
+  total: number;
+  limit: number;
+  offset: number;
+  items: EmployeeDirectoryItem[];
+};
+
+export type SearchEmployeesParams = {
+  q?: string;
+  departmentCode?: string;
+  teamCode?: string;
+  siteCode?: string;
+  employmentStatus?: string;
+  includeInactive?: boolean;
+  limit?: number;
+  offset?: number;
+};
+
+export async function searchEmployees(
+  client: Client<paths>,
+  params?: SearchEmployeesParams,
+): Promise<
+  | { ok: true; data: EmployeeSearchResponse }
+  | { ok: false; error: string; statusCode: number }
+> {
+  try {
+    const { data, response } = await client.GET('/employees', {
+      params: {
+        query: {
+          q: params?.q,
+          departmentCode: params?.departmentCode,
+          teamCode: params?.teamCode,
+          siteCode: params?.siteCode,
+          employmentStatus: params?.employmentStatus,
+          includeInactive: params?.includeInactive,
+          limit: params?.limit,
+          offset: params?.offset,
+        },
+      },
+    });
+    if (response.ok && data) {
+      return { ok: true, data: data as EmployeeSearchResponse };
+    }
+    return {
+      ok: false,
+      error: workforceErrorMessage(data, 'Could not search employee directory.'),
+      statusCode: response.status,
+    };
+  } catch {
+    return {
+      ok: false,
+      error: 'Could not search employee directory. Network or server error.',
+      statusCode: 500,
+    };
+  }
+}
+
+export async function getEmployee(
+  client: Client<paths>,
+  id: string,
+): Promise<
+  | { ok: true; data: EmployeeDirectoryItem }
+  | { ok: false; error: string; statusCode: number }
+> {
+  try {
+    const { data, response } = await client.GET('/employees/{id}', {
+      params: { path: { id } },
+    });
+    if (response.ok && data) {
+      return { ok: true, data: data as EmployeeDirectoryItem };
+    }
+    return {
+      ok: false,
+      error: workforceErrorMessage(data, 'Could not retrieve employee details.'),
+      statusCode: response.status,
+    };
+  } catch {
+    return {
+      ok: false,
+      error: 'Could not retrieve employee details. Network or server error.',
+      statusCode: 500,
+    };
+  }
+}

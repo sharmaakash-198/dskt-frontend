@@ -948,6 +948,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/employees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search employee directory
+         * @description Search imported employees with bounded pagination, criteria filters, and field-level role projections.
+         */
+        get: operations["searchEmployees"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employees/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get employee details
+         * @description Retrieve employee details by UUID or employee ID, projected according to caller role. Inactive employees return 404 for Viewer and Facilities Admin.
+         */
+        get: operations["getEmployee"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health/live": {
         parameters: {
             query?: never;
@@ -6405,6 +6445,198 @@ export interface operations {
                     "application/json": {
                         error: string;
                         message?: string;
+                    };
+                };
+            };
+            /** @description Not authenticated or session expired/revoked. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "unauthorized";
+                    };
+                };
+            };
+            /** @description Authenticated but missing the Workplace Planner role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "forbidden";
+                    };
+                };
+            };
+            /** @description The requested employee import was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "not_found";
+                    };
+                };
+            };
+        };
+    };
+    searchEmployees: {
+        parameters: {
+            query?: {
+                q?: string;
+                departmentCode?: string;
+                teamCode?: string;
+                siteCode?: string;
+                employmentStatus?: string;
+                includeInactive?: boolean;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated employee directory search results. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        total: number;
+                        limit: number;
+                        offset: number;
+                        items: {
+                            /** Format: uuid */
+                            id: string;
+                            employeeId: string;
+                            fullName: string;
+                            jobTitle: string | null;
+                            department: {
+                                /** Format: uuid */
+                                id: string;
+                                code: string;
+                                name: string;
+                            } | null;
+                            team: {
+                                /** Format: uuid */
+                                id: string;
+                                code: string;
+                                name: string;
+                            } | null;
+                            preferredSite: {
+                                /** Format: uuid */
+                                id: string;
+                                code: string;
+                                name: string;
+                            } | null;
+                            email?: string | null;
+                            employmentStatus?: string;
+                            active?: boolean;
+                            managerEmployeeId?: string | null;
+                            manager?: {
+                                employeeId: string;
+                                fullName: string;
+                            } | null;
+                        }[];
+                    };
+                };
+            };
+            /** @description Workbook validation or upload structure error. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: string;
+                        message?: string;
+                    };
+                };
+            };
+            /** @description Not authenticated or session expired/revoked. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "unauthorized";
+                    };
+                };
+            };
+            /** @description Authenticated but missing the Workplace Planner role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "forbidden";
+                    };
+                };
+            };
+        };
+    };
+    getEmployee: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Employee directory item projected according to caller role. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id: string;
+                        employeeId: string;
+                        fullName: string;
+                        jobTitle: string | null;
+                        department: {
+                            /** Format: uuid */
+                            id: string;
+                            code: string;
+                            name: string;
+                        } | null;
+                        team: {
+                            /** Format: uuid */
+                            id: string;
+                            code: string;
+                            name: string;
+                        } | null;
+                        preferredSite: {
+                            /** Format: uuid */
+                            id: string;
+                            code: string;
+                            name: string;
+                        } | null;
+                        email?: string | null;
+                        employmentStatus?: string;
+                        active?: boolean;
+                        managerEmployeeId?: string | null;
+                        manager?: {
+                            employeeId: string;
+                            fullName: string;
+                        } | null;
                     };
                 };
             };
