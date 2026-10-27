@@ -74,8 +74,8 @@ export type FloorPlanLeaseState = {
 
 export type PublicationValidationError = {
   code: string;
-  category: 'BOUNDARY' | 'CONTAINMENT' | 'COLLISION' | 'TEMPLATE' | 'LABEL' | 'LIFECYCLE';
-  entityType: 'BOUNDARY' | 'PLACEMENT' | 'REVISION' | 'FLOOR';
+  category: 'BOUNDARY' | 'CONTAINMENT' | 'COLLISION' | 'TEMPLATE' | 'LABEL' | 'LIFECYCLE' | 'ASSIGNMENT';
+  entityType: 'BOUNDARY' | 'PLACEMENT' | 'REVISION' | 'FLOOR' | 'ASSIGNMENT';
   entityId: string;
   conflictingEntityId?: string;
   message: string;
@@ -98,6 +98,7 @@ export type PublicationValidationResult = {
 
 const ERROR_COPY: Record<string, string> = {
   floor_plan_already_exists: 'A floor plan already exists for this floor.',
+  draft_already_exists: 'A draft revision already exists for this floor plan.',
   floor_not_found: 'That floor was not found.',
   floor_archived: 'This floor is archived.',
   building_archived: 'This building is archived.',
@@ -124,6 +125,10 @@ const ERROR_COPY: Record<string, string> = {
   invalid_preview_token: 'The preview token is invalid or has expired. Generate a new preview.',
   label_collision: 'A proposed label collides with an existing placement.',
   placement_not_found: 'That placed space was not found.',
+  assignment_target_removed: 'An active or future employee assignment cannot be carried forward because the space was removed.',
+  assignment_target_not_assignable: 'An assigned space is no longer an assignable physical space in this draft.',
+  assignment_target_invalid: 'An assigned employee is inactive.',
+  assignment_target_conflict: 'Conflicting assignments exist for an assigned space.',
   publication_validation_failed: 'Publication validation failed. Resolve all blockers before publishing.',
   forbidden: 'You cannot manage floor plans or boundaries.',
   unauthorized: 'Your session is no longer valid.',
@@ -169,6 +174,29 @@ export async function createDraftFloorPlan(
     return { ok: false, error: floorPlanErrorMessage(data, 'Could not create the floor plan.') };
   } catch {
     return { ok: false, error: 'Could not create the floor plan.' };
+  }
+}
+
+export async function createDraftRevision(
+  client: Client<paths>,
+  floorId: string,
+  options?: { idempotencyKey?: string },
+): Promise<{ ok: true; revision: FloorPlanRevision } | { ok: false; error: string; errorCode?: string }> {
+  try {
+    const { data, response } = await client.POST('/floors/{floorId}/floor-plan/revisions', {
+      params: { path: { floorId } },
+      body: options ?? null,
+    });
+    if ((response.status === 200 || response.status === 201) && data) {
+      return { ok: true, revision: data as FloorPlanRevision };
+    }
+    const errorCode =
+      data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
+        ? data.error
+        : undefined;
+    return { ok: false, error: floorPlanErrorMessage(data, 'Could not create a new draft revision.'), errorCode };
+  } catch {
+    return { ok: false, error: 'Could not create a new draft revision.' };
   }
 }
 

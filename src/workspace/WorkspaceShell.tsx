@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AccessAdminPanel } from '../access-admin/AccessAdminPanel';
 import { api } from '../api/client';
-import { SitesPanel } from '../sites/SitesPanel';
+import { SitesPanel, type TargetLocation } from '../sites/SitesPanel';
 import { TemplatesCatalog } from '../templates/TemplatesCatalog';
 import { EmployeeDirectoryPanel } from '../workforce/EmployeeDirectoryPanel';
 import { EmployeeImportPanel } from '../workforce/EmployeeImportPanel';
@@ -36,6 +36,7 @@ export function WorkspaceShell({
   const [entry, setEntry] = useState<WorkspaceEntry | null>(null);
   const [denied, setDenied] = useState(false);
   const [loading, setLoading] = useState(session.navigation.length > 0);
+  const [targetLocation, setTargetLocation] = useState<TargetLocation | null>(null);
 
   useEffect(() => {
     if (!selected) {
@@ -131,12 +132,22 @@ export function WorkspaceShell({
                         ? 'VIEWER'
                         : 'FACILITIES_ADMIN'
                   }
+                  onLocateOnMap={(assignment) => {
+                    setTargetLocation({
+                      siteId: assignment.siteId,
+                      buildingId: assignment.buildingId,
+                      floorId: assignment.floorId,
+                      placementIdentityId: assignment.placementIdentityId,
+                    });
+                  }}
                 />
                 <SitesPanel
                   canMutate={
                     selected === 'facilities' && session.roles.includes('FACILITIES_ADMIN')
                   }
                   isPlanner={session.roles.includes('WORKPLACE_PLANNER')}
+                  targetLocation={targetLocation}
+                  onTargetLocationNavigated={() => setTargetLocation(null)}
                 />
                 <TemplatesCatalog
                   canMutate={

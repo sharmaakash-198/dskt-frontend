@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import type { Assignment } from '../assignments/api';
+import { getSpaceAssignmentBreakdown, type Assignment } from '../assignments/api';
 import { api } from '../api/client';
 import {
   accessibleGeometrySummary,
@@ -76,6 +76,7 @@ const VALIDATION_CATEGORY_LABELS: Record<string, string> = {
   TEMPLATE: 'Template Reference Issues',
   LABEL: 'Label Validation Issues',
   LIFECYCLE: 'Lifecycle Precondition Issues',
+  ASSIGNMENT: 'Assignment Reconciliation Issues',
 };
 
 export type BoundaryEditorProps = {
@@ -84,7 +85,9 @@ export type BoundaryEditorProps = {
   canMutate: boolean;
   isPlanner?: boolean;
   assignments?: Assignment[];
+  initialPlacementIdentityId?: string | null;
   onOpenAssignSpace?: (placementId: string) => void;
+  onOpenEndAssignment?: (assignment: Assignment) => void;
   onRevisionUpdated: (updated: FloorPlanRevision) => void;
   onError: (message: string | null) => void;
 };
@@ -95,7 +98,9 @@ export function BoundaryEditor({
   canMutate,
   isPlanner = false,
   assignments = [],
+  initialPlacementIdentityId,
   onOpenAssignSpace,
+  onOpenEndAssignment,
   onRevisionUpdated,
   onError,
 }: BoundaryEditorProps) {
@@ -324,6 +329,33 @@ export function BoundaryEditor({
       cancelled = true;
     };
   }, [floorId, revision.id, revision.placements]);
+
+  const [appliedInitialPlacementId, setAppliedInitialPlacementId] = useState<string | null>(null);
+  if (initialPlacementIdentityId !== appliedInitialPlacementId) {
+    if (initialPlacementIdentityId && placements.length > 0) {
+      const target = placements.find(
+        (p) => p.placementIdentityId === initialPlacementIdentityId || p.id === initialPlacementIdentityId,
+      );
+      if (target) {
+        setAppliedInitialPlacementId(initialPlacementIdentityId);
+        setSelectedPlacementId(target.id);
+        setEditX(String(target.positionX));
+        setEditY(String(target.positionY));
+        setEditRotation(target.rotationDegrees);
+        setEditLabel(target.label ?? '');
+      }
+    } else if (!initialPlacementIdentityId) {
+      setAppliedInitialPlacementId(null);
+    }
+  }
+
+  const isStaleTargetSpace = Boolean(
+    initialPlacementIdentityId &&
+      placements.length > 0 &&
+      !placements.some(
+        (p) => p.placementIdentityId === initialPlacementIdentityId || p.id === initialPlacementIdentityId,
+      ),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -1146,7 +1178,7 @@ export function BoundaryEditor({
     return [...placements].sort((a, b) => {
       const diff = (priority[a.spatialClass] ?? 2) - (priority[b.spatialClass] ?? 2);
       if (diff !== 0) return diff;
-      return a.createdAt.localeCompare(b.createdAt);
+      return (a.createdAt || '').localeCompare(b.createdAt || '');
     });
   }, [placements]);
 
@@ -1644,6 +1676,12 @@ export function BoundaryEditor({
         )}
       </div>
 
+      {isStaleTargetSpace && (
+        <div role="status" className="stale-location-state" data-testid="stale-location-state">
+          <p>Assigned space is no longer present on the current published map.</p>
+        </div>
+      )}
+
       <div
         className="canvas-viewport"
         onMouseMove={(e) => {
@@ -2062,43 +2100,104 @@ export function BoundaryEditor({
               <span className="detail-value validation-badge valid">✓ Valid (Within boundary, no collisions)</span>
             </div>
             {revision.lifecycleState === 'PUBLISHED' && selectedPlacement.assignable && (
-              <div className="detail-row" data-testid="placement-assignment-status">
-                <span className="detail-label">Current Assignment</span>
-                <span className="detail-value">
-                  {(() => {
-                    const activeAssignment = safeAssignments.find(
-                      (a) => a.placementIdentityId === selectedPlacement.placementIdentityId,
-                    );
-                    if (activeAssignment) {
-                      return (
-                        <>
-                          <strong>{activeAssignment.employeeName}</strong> ({activeAssignment.employeeCode})
-                          <span className="period-badge" style={{ marginLeft: '8px' }}>
-                            {new Date(activeAssignment.startedAt).toLocaleDateString()}
-                            {activeAssignment.endedAt
-                              ? ` – ${new Date(activeAssignment.endedAt).toLocaleDateString()}`
-                              : ' – Ongoing'}
+              <>
+                {(() => {
+                  const breakdown = getSpaceAssignmentBreakdown(
+                    safeAssignments,
+                    selectedPlacement.placementIdentityId,
+                  );
+                  return (
+                    <>
+                      <div className="detail-row" data-testid="placement-assignment-status">
+                        <span className="detail-label">Current Assignment</span>
+                        <span className="detail-value">
+                          {breakdown.current ? (
+                            <>
+                              <span className="status-badge current" data-testid="assignment-status-current" style={{ marginRight: '6px' }}>
+                                Current
+                              </span>
+                              <strong>{breakdown.current.employeeName}</strong> ({breakdown.current.employeeCode})
+                              <span className="period-badge" style={{ marginLeft: '8px' }}>
+                                {new Date(breakdown.current.startedAt).toLocaleDateString()}
+                                {breakdown.current.endedAt
+                                  ? ` – ${new Date(breakdown.current.endedAt).toLocaleDateString()}`
+                                  : ' – Ongoing'}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="status-badge unassigned" data-testid="assignment-status-unassigned">
+                              Vacant
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                      {breakdown.future.length > 0 && (
+                        <div className="detail-row" data-testid="placement-future-assignments">
+                          <span className="detail-label">Future Assignment</span>
+                          <span className="detail-value">
+                            <span className="status-badge future" data-testid="assignment-status-future" style={{ marginRight: '6px' }}>
+                              Future
+                            </span>
+                            <strong>{breakdown.future[0]!.employeeName}</strong> ({breakdown.future[0]!.employeeCode})
+                            <span className="period-badge" style={{ marginLeft: '8px' }}>
+                              {new Date(breakdown.future[0]!.startedAt).toLocaleDateString()}
+                              {breakdown.future[0]!.endedAt
+                                ? ` – ${new Date(breakdown.future[0]!.endedAt).toLocaleDateString()}`
+                                : ' – Ongoing'}
+                            </span>
                           </span>
-                        </>
-                      );
-                    }
-                    return 'Vacant';
-                  })()}
-                </span>
-              </div>
+                        </div>
+                      )}
+                      {breakdown.ended.length > 0 && (
+                        <div className="detail-row" data-testid="placement-ended-assignments">
+                          <span className="detail-label">Past Assignments</span>
+                          <span className="detail-value">
+                            <span className="status-badge ended" data-testid="assignment-status-ended">
+                              {breakdown.ended.length} Ended
+                            </span>
+                          </span>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </>
             )}
           </div>
 
-          {isPlanner && revision.lifecycleState === 'PUBLISHED' && selectedPlacement.assignable && onOpenAssignSpace && (
-            <div className="assign-space-action-section" style={{ marginTop: '12px' }}>
-              <button
-                type="button"
-                className="primary-button assign-space-btn"
-                onClick={() => onOpenAssignSpace(selectedPlacement.id)}
-                data-testid="assign-space-btn"
-              >
-                Assign Employee to Space
-              </button>
+          {isPlanner && revision.lifecycleState === 'PUBLISHED' && selectedPlacement.assignable && (
+            <div className="assign-space-action-section" style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
+              {(() => {
+                const breakdown = getSpaceAssignmentBreakdown(
+                  safeAssignments,
+                  selectedPlacement.placementIdentityId,
+                );
+                const targetToEnd = breakdown.current || breakdown.future[0];
+                return (
+                  <>
+                    {onOpenAssignSpace && (
+                      <button
+                        type="button"
+                        className="primary-button assign-space-btn"
+                        onClick={() => onOpenAssignSpace(selectedPlacement.id)}
+                        data-testid="assign-space-btn"
+                      >
+                        Assign Employee to Space
+                      </button>
+                    )}
+                    {onOpenEndAssignment && targetToEnd && (
+                      <button
+                        type="button"
+                        className="secondary-button end-assignment-btn"
+                        onClick={() => onOpenEndAssignment(targetToEnd)}
+                        data-testid="end-assignment-btn"
+                      >
+                        End Assignment
+                      </button>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           )}
 

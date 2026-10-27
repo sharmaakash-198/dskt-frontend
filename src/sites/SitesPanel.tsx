@@ -1,24 +1,44 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../api/client';
 import { BuildingsPanel } from '../buildings/BuildingsPanel';
-import type { Building } from '../buildings/api';
+import { listBuildings, type Building } from '../buildings/api';
 import { FloorWorkspace } from '../floors/FloorWorkspace';
 import { FloorsPanel } from '../floors/FloorsPanel';
-import type { Floor } from '../floors/api';
+import { listFloors, type Floor } from '../floors/api';
 import { archiveSite, createSite, listSites, updateSite, type Site } from './api';
+
+export type TargetLocation = {
+  siteId: string;
+  buildingId: string;
+  floorId: string;
+  placementIdentityId?: string | null;
+};
 
 export type SitesPanelProps = {
   canMutate: boolean;
   isPlanner?: boolean;
+  targetLocation?: TargetLocation | null;
+  onTargetLocationNavigated?: () => void;
 };
 
 type LocationView =
   | { level: 'sites' }
   | { level: 'buildings'; site: Site }
   | { level: 'floors'; site: Site; building: Building }
-  | { level: 'floor'; site: Site; building: Building; floor: Floor };
+  | {
+      level: 'floor';
+      site: Site;
+      building: Building;
+      floor: Floor;
+      initialPlacementIdentityId?: string | null;
+    };
 
-export function SitesPanel({ canMutate, isPlanner = false }: SitesPanelProps) {
+export function SitesPanel({
+  canMutate,
+  isPlanner = false,
+  targetLocation,
+  onTargetLocationNavigated,
+}: SitesPanelProps) {
   const [view, setView] = useState<LocationView>({ level: 'sites' });
   const [sites, setSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,6 +68,50 @@ export function SitesPanel({ canMutate, isPlanner = false }: SitesPanelProps) {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!targetLocation) return;
+    const target = targetLocation;
+    let cancelled = false;
+
+    async function navigateToTarget(loc: TargetLocation) {
+      try {
+        const siteRes = await listSites(api);
+        if (cancelled || !siteRes.ok) return;
+        const targetSite = siteRes.sites.find((s) => s.id === loc.siteId);
+        if (!targetSite) return;
+
+        const bldRes = await listBuildings(api, targetSite.id);
+        if (cancelled || !bldRes.ok) return;
+        const targetBuilding = bldRes.buildings.find((b) => b.id === loc.buildingId);
+        if (!targetBuilding) return;
+
+        const flrRes = await listFloors(api, targetBuilding.id);
+        if (cancelled || !flrRes.ok) return;
+        const targetFloor = flrRes.floors.find((f) => f.id === loc.floorId);
+        if (!targetFloor) return;
+
+        setView({
+          level: 'floor',
+          site: targetSite,
+          building: targetBuilding,
+          floor: targetFloor,
+          initialPlacementIdentityId: loc.placementIdentityId ?? null,
+        });
+
+        if (onTargetLocationNavigated) {
+          onTargetLocationNavigated();
+        }
+      } catch {
+        // Safe fallback - keep current view
+      }
+    }
+
+    void navigateToTarget(target);
+    return () => {
+      cancelled = true;
+    };
+  }, [targetLocation, onTargetLocationNavigated]);
 
   async function handleCreate(event: FormEvent) {
     event.preventDefault();
@@ -112,6 +176,7 @@ export function SitesPanel({ canMutate, isPlanner = false }: SitesPanelProps) {
         floor={view.floor}
         canMutate={canMutate}
         isPlanner={isPlanner}
+        initialPlacementIdentityId={view.initialPlacementIdentityId}
         onBack={() =>
           setView({ level: 'floors', site: view.site, building: view.building })
         }

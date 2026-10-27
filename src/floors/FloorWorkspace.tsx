@@ -5,13 +5,20 @@ import type { Site } from '../sites/api';
 import type { Floor } from './api';
 import {
   createDraftFloorPlan,
+  createDraftRevision,
   getFloorPlan,
   listFloorPlanRevisions,
   type FloorPlan,
   type FloorPlanRevision,
 } from './floor-plan-api';
 import { AssignSpacePanel } from '../assignments/AssignSpacePanel';
-import { listAssignments, type Assignment } from '../assignments/api';
+import {
+  endAssignment,
+  getAssignmentHistory,
+  listAssignments,
+  type Assignment,
+  type PaginatedAssignmentHistory,
+} from '../assignments/api';
 import { BatchLabelPanel } from './BatchLabelPanel';
 import { BoundaryEditor } from './BoundaryEditor';
 
@@ -23,6 +30,7 @@ export type FloorWorkspaceProps = {
   floor: Floor;
   canMutate?: boolean;
   isPlanner?: boolean;
+  initialPlacementIdentityId?: string | null;
   onBack: () => void;
 };
 
@@ -32,6 +40,7 @@ export function FloorWorkspace({
   floor,
   canMutate = false,
   isPlanner = false,
+  initialPlacementIdentityId,
   onBack,
 }: FloorWorkspaceProps) {
   const [floorPlan, setFloorPlan] = useState<FloorPlan | null>(null);
@@ -41,6 +50,15 @@ export function FloorWorkspace({
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedCandidatePlacementId, setSelectedCandidatePlacementId] = useState<string | null>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [endingAssignment, setEndingAssignment] = useState<Assignment | null>(null);
+  const [endTimestamp, setEndTimestamp] = useState<string>('');
+  const [endingError, setEndingError] = useState<string | null>(null);
+  const [endingSubmitting, setEndingSubmitting] = useState(false);
+  const [showAssignmentHistory, setShowAssignmentHistory] = useState(false);
+  const [historyData, setHistoryData] = useState<PaginatedAssignmentHistory | null>(null);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const isPropArchived = Boolean(
     (floor as { archivedAt?: string | null }).archivedAt ||
     (building as { archivedAt?: string | null }).archivedAt ||
@@ -141,6 +159,24 @@ export function FloorWorkspace({
     }
   }
 
+  async function handleCreateReplacementDraft() {
+    setCreating(true);
+    setErrorMessage(null);
+
+    const idempotencyKey = `create-draft-rev-${floor.id}-${Date.now()}`;
+    const result = await createDraftRevision(api, floor.id, {
+      idempotencyKey,
+    });
+    setCreating(false);
+
+    if (result.ok) {
+      setRevisions((current) => [...current, result.revision]);
+      setViewMode('DRAFT');
+    } else {
+      setErrorMessage(result.error);
+    }
+  }
+
   function handleRevisionUpdated(updated: FloorPlanRevision) {
     setRevisions((current) =>
       current.map((r) => (r.id === updated.id ? updated : r)),
@@ -173,8 +209,70 @@ export function FloorWorkspace({
     };
   }, [floor.id, activePublishedRev, reloadKey]);
 
+  // Load assignment history for Workplace Planner and Facilities Admin
+  useEffect(() => {
+    if (!showAssignmentHistory) return;
+
+    let cancelled = false;
+    async function fetchHistory() {
+      setHistoryLoading(true);
+      setHistoryError(null);
+      const res = await getAssignmentHistory(api, {
+        floorId: floor.id,
+        limit: 10,
+        offset: (historyPage - 1) * 10,
+      });
+
+      if (!cancelled) {
+        setHistoryLoading(false);
+        if (res.ok) {
+          setHistoryData(res.history);
+        } else {
+          setHistoryError(res.error);
+        }
+      }
+    }
+
+    void fetchHistory();
+    return () => {
+      cancelled = true;
+    };
+  }, [showAssignmentHistory, historyPage, floor.id]);
+
+  async function handleConfirmEndAssignment(e: FormEvent) {
+    e.preventDefault();
+    if (!endingAssignment) return;
+
+    setEndingSubmitting(true);
+    setEndingError(null);
+
+    const endedAtIso = endTimestamp ? new Date(endTimestamp).toISOString() : new Date().toISOString();
+    const res = await endAssignment(api, {
+      assignmentId: endingAssignment.id,
+      endedAt: endedAtIso,
+      clientCommandId: `cmd-end-${Date.now()}-${endingAssignment.id.slice(0, 8)}`,
+    });
+
+    setEndingSubmitting(false);
+    if (res.ok) {
+      setAssignments((prev) =>
+        prev.map((a) => (a.id === res.assignment.id ? res.assignment : a)),
+      );
+      setEndingAssignment(null);
+      setReloadKey((k) => k + 1);
+    } else {
+      setEndingError(res.error);
+    }
+  }
+
   // Determine active view mode
-  const effectiveViewMode = !canMutate ? 'PUBLISHED' : (viewMode === 'DRAFT' && draftRevision ? 'DRAFT' : (activePublishedRev ? viewMode : 'DRAFT'));
+  const effectiveViewMode = !canMutate || initialPlacementIdentityId
+    ? 'PUBLISHED'
+    : draftRevision
+      ? viewMode
+      : activePublishedRev
+        ? 'PUBLISHED'
+        : 'DRAFT';
 
   const isUnavailable = !loading && !isLocationArchived && Boolean(errorMessage) && !hasRevisions && !floorPlan;
   const isEmpty = !loading && !isLocationArchived && !isUnavailable && !hasRevisions && !floorPlan;
@@ -343,6 +441,22 @@ export function FloorWorkspace({
                       {activePublishedRev.editingScale}x (Version {activePublishedRev.concurrencyVersion}).
                     </p>
                   </div>
+                  {canMutate && !draftRevision && (
+                    <div className="facilities-actions-group" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <span className="role-summary-tag" data-testid="facilities-admin-tag" style={{ fontSize: '12px', color: '#64748b', marginRight: '4px' }}>
+                        Facilities Admin (Read-Only Assignments)
+                      </span>
+                      <button
+                        type="button"
+                        className="secondary-button create-replacement-draft-btn"
+                        onClick={handleCreateReplacementDraft}
+                        disabled={creating}
+                        data-testid="create-replacement-draft-btn"
+                      >
+                        {creating ? 'Creating Draft...' : 'Create Replacement Draft'}
+                      </button>
+                    </div>
+                  )}
                   {isPlanner && (
                     <div className="planner-actions-group" style={{ display: 'flex', gap: '8px' }}>
                       <button
@@ -352,6 +466,7 @@ export function FloorWorkspace({
                           setSelectedCandidatePlacementId(null);
                           setShowAssignModal(true);
                           setShowBatchLabeling(false);
+                          setShowAssignmentHistory(false);
                         }}
                         data-testid="open-assign-space-btn"
                       >
@@ -364,12 +479,29 @@ export function FloorWorkspace({
                           onClick={() => {
                             setShowBatchLabeling(true);
                             setShowAssignModal(false);
+                            setShowAssignmentHistory(false);
                           }}
                           data-testid="open-batch-labeling-btn"
                         >
                           Batch Label Spaces
                         </button>
                       )}
+                    </div>
+                  )}
+                  {(isPlanner || canMutate) && (
+                    <div className="history-actions-group" style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        type="button"
+                        className="secondary-button view-history-toggle-btn"
+                        onClick={() => {
+                          setShowAssignmentHistory(true);
+                          setShowAssignModal(false);
+                          setShowBatchLabeling(false);
+                        }}
+                        data-testid="view-assignment-history-btn"
+                      >
+                        Assignment History
+                      </button>
                     </div>
                   )}
                 </div>
@@ -424,14 +556,165 @@ export function FloorWorkspace({
                 canMutate={false}
                 isPlanner={isPlanner}
                 assignments={assignments}
+                initialPlacementIdentityId={initialPlacementIdentityId}
                 onOpenAssignSpace={(placementId) => {
                   setSelectedCandidatePlacementId(placementId);
                   setShowAssignModal(true);
                   setShowBatchLabeling(false);
+                  setShowAssignmentHistory(false);
+                }}
+                onOpenEndAssignment={(a) => {
+                  setEndingAssignment(a);
+                  setEndTimestamp(new Date().toISOString().slice(0, 16));
+                  setEndingError(null);
                 }}
                 onRevisionUpdated={handleRevisionUpdated}
                 onError={setErrorMessage}
               />
+
+              {/* End Assignment Modal */}
+              {endingAssignment && (
+                <div className="modal-backdrop" role="dialog" aria-modal="true" data-testid="end-assignment-modal">
+                  <div className="modal-dialog">
+                    <div className="modal-header">
+                      <h3>End Space Assignment</h3>
+                      <button
+                        type="button"
+                        className="close-button"
+                        onClick={() => setEndingAssignment(null)}
+                        aria-label="Close end assignment modal"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <form onSubmit={handleConfirmEndAssignment}>
+                      <div className="modal-body">
+                        {endingError && (
+                          <div className="alert-banner alert-error" data-testid="end-assignment-error-alert">
+                            {endingError}
+                          </div>
+                        )}
+                        <p>
+                          Are you sure you want to end the assignment for{' '}
+                          <strong>{endingAssignment.employeeName}</strong> ({endingAssignment.employeeCode}) on space{' '}
+                          <strong>{endingAssignment.spaceLabel ?? 'unlabeled'}</strong>?
+                        </p>
+                        <div className="form-group" style={{ marginTop: '12px' }}>
+                          <label htmlFor="end-timestamp-input">End Date & Time</label>
+                          <input
+                            id="end-timestamp-input"
+                            type="datetime-local"
+                            value={endTimestamp}
+                            onChange={(e) => setEndTimestamp(e.target.value)}
+                            required
+                            data-testid="end-assignment-datetime-input"
+                          />
+                          <small className="field-hint">
+                            Must be later than start time ({new Date(endingAssignment.startedAt).toLocaleString()}).
+                          </small>
+                        </div>
+                      </div>
+                      <div className="modal-footer" style={{ marginTop: '16px', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => setEndingAssignment(null)}
+                          disabled={endingSubmitting}
+                          data-testid="cancel-end-assignment-btn"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="primary-button"
+                          disabled={endingSubmitting}
+                          data-testid="confirm-end-assignment-btn"
+                        >
+                          {endingSubmitting ? 'Ending...' : 'Confirm End Assignment'}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* Assignment History Drawer / Modal */}
+              {showAssignmentHistory && (
+                <div className="modal-backdrop" role="dialog" aria-modal="true" data-testid="assignment-history-drawer">
+                  <div className="modal-dialog" style={{ maxWidth: '750px', width: '90%' }}>
+                    <div className="assignment-history-header">
+                      <h3>Floor Assignment History</h3>
+                      <button
+                        type="button"
+                        className="close-button"
+                        onClick={() => setShowAssignmentHistory(false)}
+                        data-testid="close-history-btn"
+                        aria-label="Close history modal"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    {historyLoading ? (
+                      <p className="loading-hint">Loading assignment history...</p>
+                    ) : historyError ? (
+                      <div className="alert-banner alert-error">{historyError}</div>
+                    ) : !historyData || historyData.items.length === 0 ? (
+                      <p className="empty-hint" data-testid="no-history-hint">No historical assignments for this floor.</p>
+                    ) : (
+                      <>
+                        <table className="assignment-history-table" data-testid="assignment-history-table">
+                          <thead>
+                            <tr>
+                              <th>Space</th>
+                              <th>Employee</th>
+                              <th>Period</th>
+                              <th>Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {historyData.items.map((item) => (
+                              <tr key={item.id} data-testid={`history-item-${item.id}`}>
+                                <td><strong>{item.spaceLabel ?? 'Unlabeled'}</strong></td>
+                                <td>{item.employeeName} ({item.employeeCode})</td>
+                                <td>
+                                  {new Date(item.startedAt).toLocaleDateString()}
+                                  {item.endedAt ? ` – ${new Date(item.endedAt).toLocaleDateString()}` : ' – Ongoing'}
+                                </td>
+                                <td>
+                                  <span className="status-badge ended">Ended</span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        <div className="history-pagination" data-testid="history-pagination">
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
+                            disabled={historyPage <= 1}
+                            data-testid="history-prev-btn"
+                          >
+                            Previous
+                          </button>
+                          <span data-testid="history-page-info">
+                            Page {historyPage} of {Math.ceil(historyData.total / (historyData.limit || 10)) || 1} ({historyData.total} records)
+                          </span>
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            onClick={() => setHistoryPage((p) => p + 1)}
+                            disabled={historyPage >= Math.ceil(historyData.total / (historyData.limit || 10))}
+                            data-testid="history-next-btn"
+                          >
+                            Next
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
             </>
           )}
 

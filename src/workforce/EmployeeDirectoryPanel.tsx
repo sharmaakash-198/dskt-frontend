@@ -2,6 +2,7 @@ import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { api } from '../api/client';
 import {
   searchEmployees,
+  type EmployeeActiveAssignment,
   type EmployeeDirectoryItem,
   type SearchEmployeesParams,
 } from './api';
@@ -11,6 +12,7 @@ export type EmployeeDirectoryPanelProps = {
   isPlanner?: boolean;
   role?: 'WORKPLACE_PLANNER' | 'VIEWER' | 'FACILITIES_ADMIN';
   onSelectEmployee?: (employee: EmployeeDirectoryItem) => void;
+  onLocateOnMap?: (assignment: EmployeeActiveAssignment) => void;
 };
 
 export function EmployeeDirectoryPanel({
@@ -18,6 +20,7 @@ export function EmployeeDirectoryPanel({
   isPlanner = false,
   role = 'VIEWER',
   onSelectEmployee,
+  onLocateOnMap,
 }: EmployeeDirectoryPanelProps) {
   const [query, setQuery] = useState('');
   const [departmentCode, setDepartmentCode] = useState('');
@@ -327,6 +330,22 @@ export function EmployeeDirectoryPanel({
                       <span className="emp-name">{emp.fullName}</span>
                       <span className="emp-id mono">{emp.employeeId}</span>
                       {emp.active === false && <span className="badge badge-inactive">Inactive</span>}
+                      {/* Communicates unassigned, one-active-space, and multiple-active-space states without relying on color alone */}
+                      {emp.activeAssignmentCount === 0 ||
+                      (!emp.activeAssignmentCount &&
+                        (!emp.activeAssignments || emp.activeAssignments.length === 0)) ? (
+                        <span className="badge badge-unassigned" data-testid="assignment-status-unassigned">
+                          Unassigned
+                        </span>
+                      ) : emp.activeAssignmentCount === 1 || emp.activeAssignments?.length === 1 ? (
+                        <span className="badge badge-single-assignment" data-testid="assignment-status-single">
+                          1 active space
+                        </span>
+                      ) : (
+                        <span className="badge badge-multiple-assignments" data-testid="assignment-status-multiple">
+                          {emp.activeAssignmentCount ?? emp.activeAssignments?.length} active spaces
+                        </span>
+                      )}
                     </div>
                     <div className="item-meta">
                       {emp.jobTitle && <span className="meta-item title">{emp.jobTitle}</span>}
@@ -343,6 +362,12 @@ export function EmployeeDirectoryPanel({
                       {emp.preferredSite && (
                         <span className="meta-item site">
                           {emp.preferredSite.name} ({emp.preferredSite.code})
+                        </span>
+                      )}
+                      {emp.activeAssignments && emp.activeAssignments.length === 1 && emp.activeAssignments[0] && (
+                        <span className="meta-item location" data-testid="single-assignment-location">
+                          {emp.activeAssignments[0].spaceLabel ?? 'Space'} • {emp.activeAssignments[0].floorName} (
+                          {emp.activeAssignments[0].siteName})
                         </span>
                       )}
                     </div>
@@ -471,6 +496,72 @@ export function EmployeeDirectoryPanel({
               </>
             )}
           </dl>
+
+          {/* Non-canvas search and details path: complete permitted location information */}
+          <section
+            className="employee-locations-section mt-4 pt-3 border-t"
+            data-testid="non-canvas-location-details"
+            aria-label="Active space assignments"
+          >
+            <h4>Active Space Locations</h4>
+            {!selectedEmployee.activeAssignments || selectedEmployee.activeAssignments.length === 0 ? (
+              <p className="unassigned-text" data-testid="details-unassigned-message">
+                Employee currently has no active space assignments.
+              </p>
+            ) : (
+              <ul className="active-assignments-list" data-testid="employee-active-assignments">
+                {selectedEmployee.activeAssignments.map((assignment) => (
+                  <li
+                    key={assignment.id}
+                    className="active-assignment-item p-2 mb-2 border rounded"
+                    data-testid={`active-assignment-item-${assignment.id}`}
+                  >
+                    <div className="assignment-details-row flex justify-between items-center">
+                      <div>
+                        <strong>{assignment.spaceLabel ?? 'Unlabeled Space'}</strong>
+                        <div className="text-sm text-muted">
+                          <span>{assignment.siteName}</span> • <span>{assignment.buildingName}</span> •{' '}
+                          <span>{assignment.floorName}</span>
+                        </div>
+                        <div className="text-xs text-muted">
+                          Active from {new Date(assignment.startedAt).toLocaleDateString()}
+                          {assignment.endedAt
+                            ? ` to ${new Date(assignment.endedAt).toLocaleDateString()}`
+                            : ' (ongoing)'}
+                        </div>
+                      </div>
+                      <div className="assignment-actions flex items-center gap-2">
+                        {assignment.isAccessible ? (
+                          <span className="badge badge-active-location" data-testid="location-status-active">
+                            Active on Published Map
+                          </span>
+                        ) : (
+                          <span
+                            className="badge badge-inaccessible-location"
+                            data-testid="location-status-inaccessible"
+                          >
+                            Location Unavailable / Archived
+                          </span>
+                        )}
+                        {onLocateOnMap && (
+                          <button
+                            type="button"
+                            className="primary-button locate-map-btn btn-sm"
+                            disabled={!assignment.isAccessible}
+                            onClick={() => onLocateOnMap(assignment)}
+                            data-testid={`locate-on-map-btn-${assignment.id}`}
+                            aria-label={`Locate ${selectedEmployee.fullName} on ${assignment.floorName} map`}
+                          >
+                            Locate on Map
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         </section>
       )}
     </section>

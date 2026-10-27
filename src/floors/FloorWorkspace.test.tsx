@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FloorWorkspace } from './FloorWorkspace';
 
@@ -749,6 +749,881 @@ describe('FloorWorkspace', () => {
       fireEvent.click(assignSpaceBtn);
 
       expect(await screen.findByTestId('assign-space-panel')).toBeInTheDocument();
+    });
+  });
+
+  describe('Ticket 27: End and inspect assignments', () => {
+    const publishedRevWithPlacements = {
+      id: 'rev-pub-1',
+      floorPlanId: 'fp-1',
+      revisionNumber: 1,
+      lifecycleState: 'PUBLISHED',
+      editingScale: 1,
+      concurrencyVersion: 1,
+      boundary: [
+        { sequence: 0, x: 0, y: 0 },
+        { sequence: 1, x: 100, y: 0 },
+        { sequence: 2, x: 100, y: 100 },
+        { sequence: 3, x: 0, y: 100 },
+      ],
+      placements: [
+        {
+          id: 'p-1',
+          placementIdentityId: 'pi-1',
+          label: 'Desk 1',
+          positionX: 10,
+          positionY: 10,
+          rotationDegrees: 0,
+          spatialClass: 'PHYSICAL',
+          assignable: true,
+          elementTemplateId: 'tmpl-1',
+          elementTemplateRevisionId: 'rev-tmpl-1',
+          templateName: 'Standard Desk',
+          templateCode: 'DESK-STD',
+          categoryName: 'Furniture',
+          categoryCode: 'FURN',
+          vertices: [
+            { sequence: 0, x: 0, y: 0 },
+            { sequence: 1, x: 10, y: 0 },
+            { sequence: 2, x: 10, y: 10 },
+            { sequence: 3, x: 0, y: 10 },
+          ],
+          createdAt: '2026-01-01T00:00:00.000Z',
+        },
+        {
+          id: 'p-2',
+          placementIdentityId: 'pi-2',
+          label: 'Desk 2',
+          positionX: 30,
+          positionY: 10,
+          rotationDegrees: 0,
+          spatialClass: 'PHYSICAL',
+          assignable: true,
+          elementTemplateId: 'tmpl-1',
+          elementTemplateRevisionId: 'rev-tmpl-1',
+          templateName: 'Standard Desk',
+          templateCode: 'DESK-STD',
+          categoryName: 'Furniture',
+          categoryCode: 'FURN',
+          vertices: [
+            { sequence: 0, x: 0, y: 0 },
+            { sequence: 1, x: 10, y: 0 },
+            { sequence: 2, x: 10, y: 10 },
+            { sequence: 3, x: 0, y: 10 },
+          ],
+          createdAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    };
+
+    it('distinguishes current, future, and unassigned states in inspector', async () => {
+      get.mockImplementation(async (path: string) => {
+        if (path === '/floors/{floorId}/floor-plan') {
+          return {
+            data: {
+              floorPlan: { id: 'fp-1', floorId: floor.id },
+              publishedRevision: publishedRevWithPlacements,
+            },
+            response: jsonResponse(200),
+          };
+        }
+        if (path === '/floors/{floorId}/floor-plan/revisions') {
+          return {
+            data: { revisions: [publishedRevWithPlacements] },
+            response: jsonResponse(200),
+          };
+        }
+        if (path === '/assignments') {
+          return {
+            data: [
+              {
+                id: 'asgn-curr-1',
+                placementIdentityId: 'pi-1',
+                employeeId: 'emp-1',
+                employeeName: 'Jane Doe',
+                employeeCode: 'EMP-999',
+                floorId: floor.id,
+                startedAt: '2026-01-01T00:00:00.000Z',
+                endedAt: null,
+                status: 'CURRENT',
+                assignedByUserId: 'usr-1',
+                createdAt: '2026-01-01T00:00:00.000Z',
+              },
+              {
+                id: 'asgn-fut-1',
+                placementIdentityId: 'pi-1',
+                employeeId: 'emp-2',
+                employeeName: 'Bob Builder',
+                employeeCode: 'EMP-888',
+                floorId: floor.id,
+                startedAt: '2026-12-01T00:00:00.000Z',
+                endedAt: '2026-12-31T00:00:00.000Z',
+                status: 'FUTURE',
+                assignedByUserId: 'usr-1',
+                createdAt: '2026-01-01T00:00:00.000Z',
+              },
+            ],
+            response: jsonResponse(200),
+          };
+        }
+        return { data: {}, response: jsonResponse(200) };
+      });
+
+      render(
+        <FloorWorkspace
+          site={site}
+          building={building}
+          floor={floor}
+          canMutate={false}
+          isPlanner={true}
+          onBack={() => undefined}
+        />,
+      );
+
+      // Select placement 1 (has current and future assignment)
+      const selectPlacement1Btn = await screen.findByRole('button', { name: /Select Desk 1/i });
+      fireEvent.click(selectPlacement1Btn);
+
+      expect(await screen.findByTestId('assignment-status-current')).toBeInTheDocument();
+      expect(screen.getByTestId('placement-assignment-status')).toHaveTextContent('Jane Doe (EMP-999)');
+      expect(screen.getByTestId('assignment-status-future')).toBeInTheDocument();
+      expect(screen.getByTestId('placement-future-assignments')).toHaveTextContent('Bob Builder (EMP-888)');
+
+      // Select placement 2 (vacant / unassigned)
+      const selectPlacement2Btn = await screen.findByRole('button', { name: /Select Desk 2/i });
+      fireEvent.click(selectPlacement2Btn);
+
+      expect(await screen.findByTestId('assignment-status-unassigned')).toBeInTheDocument();
+      expect(screen.getByTestId('placement-assignment-status')).toHaveTextContent('Vacant');
+    });
+
+    it('allows Workplace Planner to end an active assignment and updates UI', async () => {
+      const activeAsgn = {
+        id: 'asgn-1',
+        placementIdentityId: 'pi-1',
+        employeeId: 'emp-1',
+        employeeName: 'Jane Doe',
+        employeeCode: 'EMP-999',
+        floorId: floor.id,
+        startedAt: '2026-01-01T00:00:00.000Z',
+        endedAt: null,
+        status: 'CURRENT' as const,
+        assignedByUserId: 'usr-1',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      };
+
+      get.mockImplementation(async (path: string) => {
+        if (path === '/floors/{floorId}/floor-plan') {
+          return {
+            data: {
+              floorPlan: { id: 'fp-1', floorId: floor.id },
+              publishedRevision: publishedRevWithPlacements,
+            },
+            response: jsonResponse(200),
+          };
+        }
+        if (path === '/floors/{floorId}/floor-plan/revisions') {
+          return {
+            data: { revisions: [publishedRevWithPlacements] },
+            response: jsonResponse(200),
+          };
+        }
+        if (path === '/assignments') {
+          return {
+            data: [activeAsgn],
+            response: jsonResponse(200),
+          };
+        }
+        return { data: {}, response: jsonResponse(200) };
+      });
+
+      post.mockImplementation(async (path: string) => {
+        if (path === '/assignments/{id}/end') {
+          return {
+            data: {
+              ...activeAsgn,
+              endedAt: '2026-10-27T12:00:00.000Z',
+              status: 'ENDED',
+            },
+            response: jsonResponse(200),
+          };
+        }
+        return { data: {}, response: jsonResponse(200) };
+      });
+
+      render(
+        <FloorWorkspace
+          site={site}
+          building={building}
+          floor={floor}
+          canMutate={false}
+          isPlanner={true}
+          onBack={() => undefined}
+        />,
+      );
+
+      // Select placement 1
+      const selectPlacement1Btn = await screen.findByRole('button', { name: /Select Desk 1/i });
+      fireEvent.click(selectPlacement1Btn);
+
+      const endBtn = await screen.findByTestId('end-assignment-btn');
+      fireEvent.click(endBtn);
+
+      // End assignment modal opens
+      expect(screen.getByTestId('end-assignment-modal')).toBeInTheDocument();
+      expect(screen.getByTestId('end-assignment-datetime-input')).toBeInTheDocument();
+
+      // Submit end assignment
+      const confirmBtn = screen.getByTestId('confirm-end-assignment-btn');
+      fireEvent.click(confirmBtn);
+
+      expect(post).toHaveBeenCalledWith(
+        '/assignments/{id}/end',
+        expect.objectContaining({
+          params: { path: { id: 'asgn-1' } },
+        }),
+      );
+
+      // Modal closes
+      await waitFor(() => {
+        expect(screen.queryByTestId('end-assignment-modal')).not.toBeInTheDocument();
+      });
+    });
+
+    it('opens paginated assignment history drawer and displays records', async () => {
+      get.mockImplementation(async (path: string) => {
+        if (path === '/floors/{floorId}/floor-plan') {
+          return {
+            data: {
+              floorPlan: { id: 'fp-1', floorId: floor.id },
+              publishedRevision: publishedRevWithPlacements,
+            },
+            response: jsonResponse(200),
+          };
+        }
+        if (path === '/floors/{floorId}/floor-plan/revisions') {
+          return {
+            data: { revisions: [publishedRevWithPlacements] },
+            response: jsonResponse(200),
+          };
+        }
+        if (path === '/assignments') {
+          return { data: [], response: jsonResponse(200) };
+        }
+        if (path === '/assignments/history') {
+          return {
+            data: {
+              total: 2,
+              limit: 10,
+              offset: 0,
+              items: [
+                {
+                  id: 'hist-1',
+                  placementIdentityId: 'pi-1',
+                  spaceLabel: 'Desk 1',
+                  employeeId: 'emp-1',
+                  employeeName: 'Alice Old',
+                  employeeCode: 'EMP-111',
+                  floorId: floor.id,
+                  startedAt: '2025-01-01T00:00:00.000Z',
+                  endedAt: '2025-06-01T00:00:00.000Z',
+                  status: 'ENDED',
+                  assignedByUserId: 'usr-1',
+                  createdAt: '2025-01-01T00:00:00.000Z',
+                },
+              ],
+            },
+            response: jsonResponse(200),
+          };
+        }
+        return { data: {}, response: jsonResponse(200) };
+      });
+
+      render(
+        <FloorWorkspace
+          site={site}
+          building={building}
+          floor={floor}
+          canMutate={false}
+          isPlanner={true}
+          onBack={() => undefined}
+        />,
+      );
+
+      const historyBtn = await screen.findByTestId('view-assignment-history-btn');
+      fireEvent.click(historyBtn);
+
+      expect(await screen.findByTestId('assignment-history-drawer')).toBeInTheDocument();
+      expect(screen.getByTestId('history-item-hist-1')).toHaveTextContent('Alice Old (EMP-111)');
+      expect(screen.getByTestId('history-page-info')).toHaveTextContent('Page 1 of 1');
+
+      // Close drawer
+      fireEvent.click(screen.getByTestId('close-history-btn'));
+      expect(screen.queryByTestId('assignment-history-drawer')).not.toBeInTheDocument();
+    });
+
+    it('prohibits viewer from seeing assignment history button or action controls', async () => {
+      get.mockImplementation(async (path: string) => {
+        if (path === '/floors/{floorId}/floor-plan') {
+          return {
+            data: {
+              floorPlan: { id: 'fp-1', floorId: floor.id },
+              publishedRevision: publishedRevWithPlacements,
+            },
+            response: jsonResponse(200),
+          };
+        }
+        if (path === '/floors/{floorId}/floor-plan/revisions') {
+          return {
+            data: { revisions: [publishedRevWithPlacements] },
+            response: jsonResponse(200),
+          };
+        }
+        if (path === '/assignments') {
+          return { data: [], response: jsonResponse(200) };
+        }
+        return { data: {}, response: jsonResponse(200) };
+      });
+
+      render(
+        <FloorWorkspace
+          site={site}
+          building={building}
+          floor={floor}
+          canMutate={false}
+          isPlanner={false}
+          onBack={() => undefined}
+        />,
+      );
+
+      // Verify that viewer does not see history button or mutate buttons
+      await screen.findByRole('button', { name: /Select Desk 1/i });
+      expect(screen.queryByTestId('view-assignment-history-btn')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('open-assign-space-btn')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('end-assignment-btn')).not.toBeInTheDocument();
+    });
+
+    it('displays documented read-only summary for Facilities Admin without mutate actions', async () => {
+      get.mockImplementation(async (path: string) => {
+        if (path === '/floors/{floorId}/floor-plan') {
+          return {
+            data: {
+              floorPlan: { id: 'fp-1', floorId: floor.id },
+              publishedRevision: publishedRevWithPlacements,
+            },
+            response: jsonResponse(200),
+          };
+        }
+        if (path === '/floors/{floorId}/floor-plan/revisions') {
+          return {
+            data: { revisions: [publishedRevWithPlacements] },
+            response: jsonResponse(200),
+          };
+        }
+        if (path === '/assignments') {
+          return { data: [], response: jsonResponse(200) };
+        }
+        return { data: {}, response: jsonResponse(200) };
+      });
+
+      render(
+        <FloorWorkspace
+          site={site}
+          building={building}
+          floor={floor}
+          canMutate={true}
+          isPlanner={false}
+          onBack={() => undefined}
+        />,
+      );
+
+      // Facilities Admin has view access to history and tag
+      expect(await screen.findByTestId('facilities-admin-tag')).toHaveTextContent(
+        'Facilities Admin (Read-Only Assignments)',
+      );
+      expect(screen.getByTestId('view-assignment-history-btn')).toBeInTheDocument();
+      // But no mutate actions
+      expect(screen.queryByTestId('open-assign-space-btn')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('end-assignment-btn')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Ticket 28: Carry Assignments into a replacement revision', () => {
+    it('renders Create Replacement Draft button for Facilities Admin when floor plan is published without active draft', async () => {
+      get.mockImplementation(async (path: string) => {
+        if (path.includes('/floor-plan/revisions')) {
+          return {
+            data: {
+              revisions: [
+                {
+                  id: 'rev-pub-1',
+                  floorPlanId: 'fp-1',
+                  revisionNumber: 1,
+                  lifecycleState: 'PUBLISHED',
+                  editingScale: 1,
+                  concurrencyVersion: 5,
+                  createdByUserId: 'user-1',
+                  publishedByUserId: 'user-1',
+                  publishedAt: '2026-10-01T09:00:00.000Z',
+                  boundaryVertices: [],
+                  placements: [],
+                  createdAt: '2026-10-01T09:00:00.000Z',
+                  updatedAt: '2026-10-01T09:00:00.000Z',
+                },
+              ],
+            },
+            response: jsonResponse(200),
+          };
+        }
+        if (path === `/floors/${floor.id}/floor-plan`) {
+          return {
+            data: {
+              floorPlan: { id: 'fp-1', floorId: floor.id },
+              activeRevision: null,
+              publishedRevision: {
+                id: 'rev-pub-1',
+                floorPlanId: 'fp-1',
+                revisionNumber: 1,
+                lifecycleState: 'PUBLISHED',
+                editingScale: 1,
+                concurrencyVersion: 5,
+                createdByUserId: 'user-1',
+                publishedByUserId: 'user-1',
+                publishedAt: '2026-10-01T09:00:00.000Z',
+                boundaryVertices: [],
+                placements: [],
+                createdAt: '2026-10-01T09:00:00.000Z',
+                updatedAt: '2026-10-01T09:00:00.000Z',
+              },
+            },
+            response: jsonResponse(200),
+          };
+        }
+        if (path.includes('/assignments')) {
+          return { data: [], response: jsonResponse(200) };
+        }
+        return { data: {}, response: jsonResponse(200) };
+      });
+
+      render(
+        <FloorWorkspace
+          site={site}
+          building={building}
+          floor={floor}
+          canMutate={true}
+          isPlanner={false}
+          onBack={() => undefined}
+        />,
+      );
+
+      // Verify "Create Replacement Draft" button is visible for Facilities Admin
+      const createDraftBtn = await screen.findByTestId('create-replacement-draft-btn');
+      expect(createDraftBtn).toBeInTheDocument();
+      expect(createDraftBtn).toHaveTextContent('Create Replacement Draft');
+    });
+
+    it('creates replacement draft revision from published revision and switches to Draft Editor', async () => {
+      get.mockImplementation(async (path: string) => {
+        if (path.includes('/floor-plan/revisions')) {
+          return {
+            data: {
+              revisions: [
+                {
+                  id: 'rev-pub-1',
+                  floorPlanId: 'fp-1',
+                  revisionNumber: 1,
+                  lifecycleState: 'PUBLISHED',
+                  editingScale: 1,
+                  concurrencyVersion: 5,
+                  createdByUserId: 'user-1',
+                  publishedByUserId: 'user-1',
+                  publishedAt: '2026-10-01T09:00:00.000Z',
+                  boundaryVertices: [],
+                  placements: [],
+                  createdAt: '2026-10-01T09:00:00.000Z',
+                  updatedAt: '2026-10-01T09:00:00.000Z',
+                },
+              ],
+            },
+            response: jsonResponse(200),
+          };
+        }
+        if (path === `/floors/${floor.id}/floor-plan`) {
+          return {
+            data: {
+              floorPlan: { id: 'fp-1', floorId: floor.id },
+              activeRevision: null,
+              publishedRevision: {
+                id: 'rev-pub-1',
+                floorPlanId: 'fp-1',
+                revisionNumber: 1,
+                lifecycleState: 'PUBLISHED',
+                editingScale: 1,
+                concurrencyVersion: 5,
+                createdByUserId: 'user-1',
+                publishedByUserId: 'user-1',
+                publishedAt: '2026-10-01T09:00:00.000Z',
+                boundaryVertices: [],
+                placements: [],
+                createdAt: '2026-10-01T09:00:00.000Z',
+                updatedAt: '2026-10-01T09:00:00.000Z',
+              },
+            },
+            response: jsonResponse(200),
+          };
+        }
+        if (path.includes('/assignments')) {
+          return { data: [], response: jsonResponse(200) };
+        }
+        return { data: {}, response: jsonResponse(200) };
+      });
+
+      post.mockImplementation(async (path: string) => {
+        if (path.includes('/revisions') && !path.includes('/lease')) {
+          return {
+            data: {
+              id: 'rev-draft-2',
+              floorPlanId: 'fp-1',
+              revisionNumber: 2,
+              lifecycleState: 'DRAFT',
+              editingScale: 1,
+              concurrencyVersion: 0,
+              createdByUserId: 'user-1',
+              boundaryVertices: [],
+              placements: [],
+              createdAt: '2026-10-27T10:00:00.000Z',
+              updatedAt: '2026-10-27T10:00:00.000Z',
+            },
+            response: jsonResponse(201),
+          };
+        }
+        if (path.includes('/lease')) {
+          return {
+            data: {
+              floorPlanRevisionId: 'rev-draft-2',
+              token: 'lease-tok-2',
+              acquiredAt: new Date().toISOString(),
+              expiresAt: new Date(Date.now() + 60000).toISOString(),
+              renewedAt: new Date().toISOString(),
+              releasedAt: null,
+              isExpired: false,
+              owner: { id: 'user-1', displayName: 'Facilities Admin', email: 'fac@dskt.local' },
+            },
+            response: jsonResponse(200),
+          };
+        }
+        return { data: {}, response: jsonResponse(200) };
+      });
+
+      render(
+        <FloorWorkspace
+          site={site}
+          building={building}
+          floor={floor}
+          canMutate={true}
+          isPlanner={false}
+          onBack={() => undefined}
+        />,
+      );
+
+      const createDraftBtn = await screen.findByTestId('create-replacement-draft-btn');
+      fireEvent.click(createDraftBtn);
+
+      // Verify workspace enters Draft Editor for Revision 2
+      expect(await screen.findByTestId('tab-draft-editor')).toHaveTextContent('Draft Editor (Rev 2)');
+      expect(screen.getByText(/Revision 2 is in Draft state/i)).toBeInTheDocument();
+    });
+
+    it('hides Create Replacement Draft button for non-facilities roles', async () => {
+      get.mockImplementation(async (path: string) => {
+        if (path.includes('/floor-plan/revisions')) {
+          return {
+            data: {
+              revisions: [
+                {
+                  id: 'rev-pub-1',
+                  floorPlanId: 'fp-1',
+                  revisionNumber: 1,
+                  lifecycleState: 'PUBLISHED',
+                  editingScale: 1,
+                  concurrencyVersion: 5,
+                  createdByUserId: 'user-1',
+                  publishedByUserId: 'user-1',
+                  publishedAt: '2026-10-01T09:00:00.000Z',
+                  boundaryVertices: [],
+                  placements: [],
+                  createdAt: '2026-10-01T09:00:00.000Z',
+                  updatedAt: '2026-10-01T09:00:00.000Z',
+                },
+              ],
+            },
+            response: jsonResponse(200),
+          };
+        }
+        if (path === `/floors/${floor.id}/floor-plan`) {
+          return {
+            data: {
+              floorPlan: { id: 'fp-1', floorId: floor.id },
+              activeRevision: null,
+              publishedRevision: {
+                id: 'rev-pub-1',
+                floorPlanId: 'fp-1',
+                revisionNumber: 1,
+                lifecycleState: 'PUBLISHED',
+                editingScale: 1,
+                concurrencyVersion: 5,
+                createdByUserId: 'user-1',
+                publishedByUserId: 'user-1',
+                publishedAt: '2026-10-01T09:00:00.000Z',
+                boundaryVertices: [],
+                placements: [],
+                createdAt: '2026-10-01T09:00:00.000Z',
+                updatedAt: '2026-10-01T09:00:00.000Z',
+              },
+            },
+            response: jsonResponse(200),
+          };
+        }
+        if (path.includes('/assignments')) {
+          return { data: [], response: jsonResponse(200) };
+        }
+        return { data: {}, response: jsonResponse(200) };
+      });
+
+      render(
+        <FloorWorkspace
+          site={site}
+          building={building}
+          floor={floor}
+          canMutate={false}
+          isPlanner={true}
+          onBack={() => undefined}
+        />,
+      );
+
+      await screen.findByRole('heading', { name: /Published Floor Plan Active/i });
+      expect(screen.queryByTestId('create-replacement-draft-btn')).toBeNull();
+    });
+
+    it('focuses space on published map and opens space details for Viewer without relying on color alone (Ticket 29)', async () => {
+      const deskPlacement = {
+        id: 'place-desk-1',
+        floorPlanRevisionId: 'rev-pub-1',
+        placementIdentityId: 'pi-desk-target',
+        elementTemplateRevisionId: 'tmpl-rev-1',
+        templateId: 't-1',
+        templateCode: 'DESK-STD',
+        templateName: 'Standard Desk',
+        templateRevisionNumber: 1,
+        assignable: true,
+        spatialClass: 'PHYSICAL' as const,
+        borderColor: '#1e3a8a',
+        fillColor: '#93c5fd',
+        positionX: 20,
+        positionY: 20,
+        rotationDegrees: 0,
+        label: 'Desk A-101',
+        vertices: [
+          { x: 20, y: 20 },
+          { x: 30, y: 20 },
+          { x: 30, y: 30 },
+          { x: 20, y: 30 },
+        ],
+        localVertices: [
+          { x: 0, y: 0 },
+          { x: 10, y: 0 },
+          { x: 10, y: 10 },
+          { x: 0, y: 10 },
+        ],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      const pubRevWithDesk = {
+        id: 'rev-pub-1',
+        floorPlanId: 'fp-1',
+        revisionNumber: 1,
+        lifecycleState: 'PUBLISHED' as const,
+        editingScale: 1,
+        concurrencyVersion: 1,
+        boundary: [
+          { x: 0, y: 0 },
+          { x: 100, y: 0 },
+          { x: 100, y: 100 },
+          { x: 0, y: 100 },
+        ],
+        placements: [deskPlacement],
+        createdAt: '2026-10-01T09:00:00.000Z',
+        updatedAt: '2026-10-01T09:00:00.000Z',
+      };
+
+      get.mockImplementation(async (path: string) => {
+        if (path === '/floors/{floorId}/floor-plan/revisions') {
+          return {
+            data: {
+              revisions: [pubRevWithDesk],
+            },
+            response: jsonResponse(200),
+          };
+        }
+        if (path === '/floors/{floorId}/floor-plan') {
+          return {
+            data: {
+              floorPlan: { id: 'fp-1', floorId: floor.id },
+              activeRevision: null,
+              publishedRevision: pubRevWithDesk,
+            },
+            response: jsonResponse(200),
+          };
+        }
+        if (path === '/assignments') {
+          return {
+            data: [
+              {
+                id: 'asgn-1',
+                placementIdentityId: 'pi-desk-target',
+                employeeId: 'emp-1',
+                employeeName: 'Alice Walker',
+                employeeCode: 'EMP-001',
+                spaceLabel: 'Desk A-101',
+                floorId: floor.id,
+                floorName: floor.name,
+                buildingName: building.name,
+                siteName: site.name,
+                startedAt: '2026-01-01T00:00:00.000Z',
+                endedAt: null,
+                status: 'CURRENT',
+                createdAt: '2026-01-01T00:00:00.000Z',
+              },
+            ],
+            response: jsonResponse(200),
+          };
+        }
+        return { data: {}, response: jsonResponse(200) };
+      });
+
+      render(
+        <FloorWorkspace
+          site={site}
+          building={building}
+          floor={floor}
+          canMutate={false}
+          isPlanner={false}
+          initialPlacementIdentityId="pi-desk-target"
+          onBack={() => undefined}
+        />,
+      );
+
+      // Verify published floor plan is active
+      await screen.findByRole('heading', { name: /Published Floor Plan Active/i });
+
+      // Verify the target space is automatically focused and selected
+      await waitFor(() => {
+        expect(screen.getByTestId('selection-affordance')).toBeInTheDocument();
+      });
+
+      // Verify accessible space inspector is open with employee details without relying on color alone
+      const inspector = await screen.findByRole('region', { name: /Details for Desk A-101/i });
+      expect(inspector).toBeInTheDocument();
+      expect(inspector).toHaveTextContent('Desk A-101');
+      expect(inspector).toHaveTextContent('Alice Walker');
+      expect(inspector).toHaveTextContent('EMP-001');
+      expect(screen.getByTestId('assignment-status-current')).toHaveTextContent('Current');
+    });
+
+    it('renders safe state when target space placement is stale or deleted (Ticket 29)', async () => {
+      const pubRevEmpty = {
+        id: 'rev-pub-1',
+        floorPlanId: 'fp-1',
+        revisionNumber: 1,
+        lifecycleState: 'PUBLISHED' as const,
+        editingScale: 1,
+        concurrencyVersion: 1,
+        boundary: [
+          { x: 0, y: 0 },
+          { x: 100, y: 0 },
+          { x: 100, y: 100 },
+          { x: 0, y: 100 },
+        ],
+        placements: [
+          {
+            id: 'place-desk-other',
+            floorPlanRevisionId: 'rev-pub-1',
+            placementIdentityId: 'pi-other',
+            elementTemplateRevisionId: 'tmpl-rev-1',
+            templateId: 't-1',
+            templateCode: 'DESK-STD',
+            templateName: 'Standard Desk',
+            templateRevisionNumber: 1,
+            assignable: true,
+            spatialClass: 'PHYSICAL' as const,
+            borderColor: '#1e3a8a',
+            fillColor: '#93c5fd',
+            positionX: 20,
+            positionY: 20,
+            rotationDegrees: 0,
+            label: 'Desk Other',
+            vertices: [
+              { x: 20, y: 20 },
+              { x: 30, y: 20 },
+              { x: 30, y: 30 },
+              { x: 20, y: 30 },
+            ],
+            localVertices: [
+              { x: 0, y: 0 },
+              { x: 10, y: 0 },
+              { x: 10, y: 10 },
+              { x: 0, y: 10 },
+            ],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        ],
+        createdAt: '2026-10-01T09:00:00.000Z',
+        updatedAt: '2026-10-01T09:00:00.000Z',
+      };
+
+      get.mockImplementation(async (path: string) => {
+        if (path === '/floors/{floorId}/floor-plan/revisions') {
+          return {
+            data: {
+              revisions: [pubRevEmpty],
+            },
+            response: jsonResponse(200),
+          };
+        }
+        if (path === '/floors/{floorId}/floor-plan') {
+          return {
+            data: {
+              floorPlan: { id: 'fp-1', floorId: floor.id },
+              activeRevision: null,
+              publishedRevision: pubRevEmpty,
+            },
+            response: jsonResponse(200),
+          };
+        }
+        if (path === '/assignments') {
+          return { data: [], response: jsonResponse(200) };
+        }
+        return { data: {}, response: jsonResponse(200) };
+      });
+
+      render(
+        <FloorWorkspace
+          site={site}
+          building={building}
+          floor={floor}
+          canMutate={false}
+          isPlanner={false}
+          initialPlacementIdentityId="pi-nonexistent-or-stale"
+          onBack={() => undefined}
+        />,
+      );
+
+      await screen.findByRole('heading', { name: /Published Floor Plan Active/i });
+      expect(screen.getByTestId('stale-location-state')).toHaveTextContent(
+        /assigned space is no longer present on the current published map/i,
+      );
     });
   });
 });

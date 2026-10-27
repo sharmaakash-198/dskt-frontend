@@ -197,6 +197,21 @@ export type EmployeeManager = {
   fullName: string;
 };
 
+export type EmployeeActiveAssignment = {
+  id: string;
+  placementIdentityId: string;
+  spaceLabel: string | null;
+  siteId: string;
+  siteName: string;
+  buildingId: string;
+  buildingName: string;
+  floorId: string;
+  floorName: string;
+  startedAt: string;
+  endedAt: string | null;
+  isAccessible: boolean;
+};
+
 export type EmployeeDirectoryItem = {
   id: string;
   employeeId: string;
@@ -210,6 +225,8 @@ export type EmployeeDirectoryItem = {
   active?: boolean;
   managerEmployeeId?: string | null;
   manager?: EmployeeManager | null;
+  activeAssignmentCount?: number;
+  activeAssignments?: EmployeeActiveAssignment[];
 };
 
 export type EmployeeSearchResponse = {

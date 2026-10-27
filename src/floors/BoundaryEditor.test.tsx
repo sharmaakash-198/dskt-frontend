@@ -2228,5 +2228,152 @@ describe('BoundaryEditor', () => {
       expect(screen.getByTestId('category-group-boundary')).toBeInTheDocument();
     });
   });
+
+  describe('Ticket 28: Carry Assignments into a replacement revision', () => {
+    it('displays assignment reconciliation blockers when assigned space is removed or non-assignable in draft', async () => {
+      post.mockImplementation(async (path: string) => {
+        if (path.includes('/lease')) {
+          return {
+            data: {
+              floorPlanRevisionId: 'rev-draft-1',
+              token: 'tok-pub-1',
+              acquiredAt: new Date().toISOString(),
+              expiresAt: new Date(Date.now() + 60000).toISOString(),
+              renewedAt: new Date().toISOString(),
+              releasedAt: null,
+              isExpired: false,
+              owner: { id: 'usr-1', displayName: 'Facilities Admin', email: 'fac@dskt.local' },
+            },
+            response: jsonResponse(200),
+          };
+        }
+        if (path.includes('/validate')) {
+          return {
+            data: {
+              isValid: false,
+              ready: false,
+              floorId: 'floor-1',
+              revisionId: 'rev-draft-1',
+              concurrencyVersion: 5,
+              summary: 'Validation found 1 blocker(s) preventing publication.',
+              errors: [
+                {
+                  code: 'assignment_target_removed',
+                  category: 'ASSIGNMENT',
+                  entityType: 'PLACEMENT',
+                  entityId: 'pi-1',
+                  message: 'Active or future assignment for Alice Walker (EMP-001) cannot be carried forward: the assigned space was removed in this draft revision.',
+                  correctiveAction: 'Reassign or end the employee assignment before publishing, or restore the space in the draft editor.',
+                },
+              ],
+              warnings: [],
+            },
+            response: jsonResponse(200),
+          };
+        }
+        return { data: null, response: jsonResponse(404) };
+      });
+
+      render(
+        <BoundaryEditor
+          floorId="floor-1"
+          revision={sampleDraftRevision}
+          canMutate={true}
+          onRevisionUpdated={() => undefined}
+          onError={() => undefined}
+        />,
+      );
+
+      fireEvent.click(screen.getByTestId('validate-publication-button'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('publication-validation-panel')).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId('category-group-assignment')).toBeInTheDocument();
+      expect(screen.getByText('Assignment Reconciliation Issues')).toBeInTheDocument();
+      expect(screen.getByText(/Alice Walker \(EMP-001\)/)).toBeInTheDocument();
+      expect(screen.getByText(/Reassign or end the employee assignment/)).toBeInTheDocument();
+    });
+
+    it('successfully publishes replacement revision when assignments carry forward cleanly', async () => {
+      const onRevisionUpdated = vi.fn();
+      post.mockImplementation(async (path: string) => {
+        if (path.includes('/lease')) {
+          return {
+            data: {
+              floorPlanRevisionId: 'rev-draft-1',
+              token: 'tok-pub-1',
+              acquiredAt: new Date().toISOString(),
+              expiresAt: new Date(Date.now() + 60000).toISOString(),
+              renewedAt: new Date().toISOString(),
+              releasedAt: null,
+              isExpired: false,
+              owner: { id: 'usr-1', displayName: 'Facilities Admin', email: 'fac@dskt.local' },
+            },
+            response: jsonResponse(200),
+          };
+        }
+        if (path.includes('/validate')) {
+          return {
+            data: {
+              isValid: true,
+              ready: true,
+              floorId: 'floor-1',
+              revisionId: 'rev-draft-1',
+              concurrencyVersion: 5,
+              summary: 'Draft revision is valid and ready for publication.',
+              errors: [],
+              warnings: [],
+            },
+            response: jsonResponse(200),
+          };
+        }
+        if (path.includes('/publish')) {
+          return {
+            data: {
+              revision: {
+                ...sampleDraftRevision,
+                revisionNumber: 2,
+                lifecycleState: 'PUBLISHED',
+                concurrencyVersion: 6,
+                publishedAt: new Date().toISOString(),
+              },
+            },
+            response: jsonResponse(200),
+          };
+        }
+        return { data: null, response: jsonResponse(404) };
+      });
+
+      render(
+        <BoundaryEditor
+          floorId="floor-1"
+          revision={sampleDraftRevision}
+          canMutate={true}
+          onRevisionUpdated={onRevisionUpdated}
+          onError={() => undefined}
+        />,
+      );
+
+      fireEvent.click(screen.getByTestId('validate-publication-button'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('publication-ready-banner')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId('publish-floor-plan-button'));
+      fireEvent.click(screen.getByTestId('confirm-publish-submit-btn'));
+
+      await waitFor(() => {
+        expect(onRevisionUpdated).toHaveBeenCalledWith(
+          expect.objectContaining({
+            revisionNumber: 2,
+            lifecycleState: 'PUBLISHED',
+          }),
+        );
+      });
+    });
+  });
 });
 

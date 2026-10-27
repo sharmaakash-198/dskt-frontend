@@ -477,7 +477,11 @@ export interface paths {
          */
         get: operations["listFloorPlanRevisions"];
         put?: never;
-        post?: never;
+        /**
+         * Create a new draft revision based on the published floor plan revision
+         * @description Creates a new editable draft revision branched from the current Published revision, preserving stable placement identities while leaving the published revision immutable.
+         */
+        post: operations["createFloorPlanRevision"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1037,7 +1041,7 @@ export interface paths {
         };
         /**
          * List space assignments
-         * @description Query assignments filtered by employeeId, placementIdentityId, or floorId.
+         * @description Query assignments filtered by employeeId, placementIdentityId, floorId, or status. Viewers receive strictly permitted current occupancy.
          */
         get: operations["listAssignments"];
         put?: never;
@@ -1046,6 +1050,46 @@ export interface paths {
          * @description Create a time-bounded space assignment for an employee to an assignable space in the active Published floor plan revision. Enforces non-overlapping periods, idempotency, and audit logging.
          */
         post: operations["createAssignment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assignments/{id}/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * End an active or future assignment
+         * @description End an active or future space assignment at a valid timestamp while preserving original creation details and recording an audit event. Rejects attempts to silently rewrite already historical assignments.
+         */
+        post: operations["endAssignment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assignments/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get paginated assignment history
+         * @description Inspect historical assignment records with bounded pagination. Inaccessible to Viewer role.
+         */
+        get: operations["getAssignmentHistory"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3137,7 +3181,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "draft_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -3329,9 +3373,9 @@ export interface operations {
                         validationErrors?: {
                             code: string;
                             /** @enum {string} */
-                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE";
+                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE" | "ASSIGNMENT";
                             /** @enum {string} */
-                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR";
+                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR" | "ASSIGNMENT";
                             entityId: string;
                             conflictingEntityId?: string;
                             message: string;
@@ -3389,7 +3433,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "draft_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -3516,7 +3560,171 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "draft_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        currentConcurrencyVersion?: number;
+                    };
+                };
+            };
+        };
+    };
+    createFloorPlanRevision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                floorId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    idempotencyKey?: string;
+                } | null;
+            };
+        };
+        responses: {
+            /** @description Floor Plan Revision projection. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id: string;
+                        /** Format: uuid */
+                        floorPlanId: string;
+                        revisionNumber: number;
+                        /** @enum {string} */
+                        lifecycleState: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+                        editingScale: number;
+                        concurrencyVersion: number;
+                        publishedByUserId?: string | null;
+                        publishedAt?: string | null;
+                        /** @default [] */
+                        boundary: {
+                            x: number;
+                            y: number;
+                        }[];
+                        /** @default [] */
+                        placements: {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            floorPlanRevisionId: string;
+                            /** Format: uuid */
+                            placementIdentityId: string;
+                            /** Format: uuid */
+                            elementTemplateRevisionId: string;
+                            /** Format: uuid */
+                            templateId: string;
+                            templateCode: string;
+                            templateName: string;
+                            templateRevisionNumber: number;
+                            assignable: boolean;
+                            /** @enum {string} */
+                            spatialClass: "PHYSICAL" | "ZONE" | "OBSTACLE";
+                            borderColor: string;
+                            fillColor: string;
+                            positionX: number;
+                            positionY: number;
+                            rotationDegrees: number;
+                            label: string | null;
+                            vertices: {
+                                x: number;
+                                y: number;
+                            }[];
+                            localVertices: {
+                                x: number;
+                                y: number;
+                            }[];
+                            createdAt: string;
+                            updatedAt: string;
+                        }[];
+                        createdAt: string;
+                        updatedAt: string;
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: string;
+                        diagnostics?: {
+                            code: string;
+                            message: string;
+                            vertexIndex?: number;
+                            edgeIndex?: number;
+                        }[];
+                        validationErrors?: {
+                            code: string;
+                            /** @enum {string} */
+                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE" | "ASSIGNMENT";
+                            /** @enum {string} */
+                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR" | "ASSIGNMENT";
+                            entityId: string;
+                            conflictingEntityId?: string;
+                            message: string;
+                            correctiveAction: string;
+                            vertexIndex?: number;
+                            edgeIndex?: number;
+                            details?: {
+                                [key: string]: unknown;
+                            };
+                        }[];
+                    };
+                };
+            };
+            /** @description Not authenticated or session expired/revoked. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "unauthorized";
+                    };
+                };
+            };
+            /** @description Authenticated but missing a required application role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "forbidden";
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "published_revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "draft_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -3645,7 +3853,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "draft_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -3688,9 +3896,9 @@ export interface operations {
                         errors: {
                             code: string;
                             /** @enum {string} */
-                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE";
+                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE" | "ASSIGNMENT";
                             /** @enum {string} */
-                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR";
+                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR" | "ASSIGNMENT";
                             entityId: string;
                             conflictingEntityId?: string;
                             message: string;
@@ -3704,9 +3912,9 @@ export interface operations {
                         warnings: {
                             code: string;
                             /** @enum {string} */
-                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE";
+                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE" | "ASSIGNMENT";
                             /** @enum {string} */
-                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR";
+                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR" | "ASSIGNMENT";
                             entityId: string;
                             conflictingEntityId?: string;
                             message: string;
@@ -3737,9 +3945,9 @@ export interface operations {
                         validationErrors?: {
                             code: string;
                             /** @enum {string} */
-                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE";
+                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE" | "ASSIGNMENT";
                             /** @enum {string} */
-                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR";
+                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR" | "ASSIGNMENT";
                             entityId: string;
                             conflictingEntityId?: string;
                             message: string;
@@ -3797,7 +4005,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "draft_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -3910,9 +4118,9 @@ export interface operations {
                         validationErrors?: {
                             code: string;
                             /** @enum {string} */
-                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE";
+                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE" | "ASSIGNMENT";
                             /** @enum {string} */
-                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR";
+                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR" | "ASSIGNMENT";
                             entityId: string;
                             conflictingEntityId?: string;
                             message: string;
@@ -3970,7 +4178,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "draft_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -4107,7 +4315,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "draft_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -4199,7 +4407,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "draft_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -4293,7 +4501,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "draft_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -4390,7 +4598,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "draft_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -4473,7 +4681,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "draft_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -4568,7 +4776,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "draft_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -4683,9 +4891,9 @@ export interface operations {
                         validationErrors?: {
                             code: string;
                             /** @enum {string} */
-                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE";
+                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE" | "ASSIGNMENT";
                             /** @enum {string} */
-                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR";
+                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR" | "ASSIGNMENT";
                             entityId: string;
                             conflictingEntityId?: string;
                             message: string;
@@ -4743,7 +4951,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "draft_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -4854,9 +5062,9 @@ export interface operations {
                         validationErrors?: {
                             code: string;
                             /** @enum {string} */
-                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE";
+                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE" | "ASSIGNMENT";
                             /** @enum {string} */
-                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR";
+                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR" | "ASSIGNMENT";
                             entityId: string;
                             conflictingEntityId?: string;
                             message: string;
@@ -4914,7 +5122,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "draft_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -5021,7 +5229,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "draft_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -5117,9 +5325,9 @@ export interface operations {
                         validationErrors?: {
                             code: string;
                             /** @enum {string} */
-                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE";
+                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE" | "ASSIGNMENT";
                             /** @enum {string} */
-                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR";
+                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR" | "ASSIGNMENT";
                             entityId: string;
                             conflictingEntityId?: string;
                             message: string;
@@ -5177,7 +5385,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "draft_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -5234,9 +5442,9 @@ export interface operations {
                         validationErrors?: {
                             code: string;
                             /** @enum {string} */
-                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE";
+                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE" | "ASSIGNMENT";
                             /** @enum {string} */
-                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR";
+                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR" | "ASSIGNMENT";
                             entityId: string;
                             conflictingEntityId?: string;
                             message: string;
@@ -5294,7 +5502,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "draft_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -5388,9 +5596,9 @@ export interface operations {
                         validationErrors?: {
                             code: string;
                             /** @enum {string} */
-                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE";
+                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE" | "ASSIGNMENT";
                             /** @enum {string} */
-                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR";
+                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR" | "ASSIGNMENT";
                             entityId: string;
                             conflictingEntityId?: string;
                             message: string;
@@ -5448,7 +5656,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "draft_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -5526,9 +5734,9 @@ export interface operations {
                         validationErrors?: {
                             code: string;
                             /** @enum {string} */
-                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE";
+                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE" | "ASSIGNMENT";
                             /** @enum {string} */
-                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR";
+                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR" | "ASSIGNMENT";
                             entityId: string;
                             conflictingEntityId?: string;
                             message: string;
@@ -5586,7 +5794,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "draft_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -5651,9 +5859,9 @@ export interface operations {
                         validationErrors?: {
                             code: string;
                             /** @enum {string} */
-                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE";
+                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE" | "ASSIGNMENT";
                             /** @enum {string} */
-                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR";
+                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR" | "ASSIGNMENT";
                             entityId: string;
                             conflictingEntityId?: string;
                             message: string;
@@ -5711,7 +5919,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "draft_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -6873,6 +7081,26 @@ export interface operations {
                                 employeeId: string;
                                 fullName: string;
                             } | null;
+                            activeAssignmentCount?: number;
+                            activeAssignments?: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                placementIdentityId: string;
+                                spaceLabel: string | null;
+                                /** Format: uuid */
+                                siteId: string;
+                                siteName: string;
+                                /** Format: uuid */
+                                buildingId: string;
+                                buildingName: string;
+                                /** Format: uuid */
+                                floorId: string;
+                                floorName: string;
+                                startedAt: string;
+                                endedAt: string | null;
+                                isAccessible: boolean;
+                            }[];
                         }[];
                     };
                 };
@@ -6964,6 +7192,26 @@ export interface operations {
                             employeeId: string;
                             fullName: string;
                         } | null;
+                        activeAssignmentCount?: number;
+                        activeAssignments?: {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            placementIdentityId: string;
+                            spaceLabel: string | null;
+                            /** Format: uuid */
+                            siteId: string;
+                            siteName: string;
+                            /** Format: uuid */
+                            buildingId: string;
+                            buildingName: string;
+                            /** Format: uuid */
+                            floorId: string;
+                            floorName: string;
+                            startedAt: string;
+                            endedAt: string | null;
+                            isAccessible: boolean;
+                        }[];
                     };
                 };
             };
@@ -7011,6 +7259,7 @@ export interface operations {
                 employeeId?: string;
                 placementIdentityId?: string;
                 floorId?: string;
+                status?: "CURRENT" | "FUTURE" | "ENDED" | "ALL";
             };
             header?: never;
             path?: never;
@@ -7039,12 +7288,20 @@ export interface operations {
                         /** Format: uuid */
                         floorId: string;
                         floorName: string;
+                        /** Format: uuid */
+                        buildingId?: string;
                         buildingName: string;
+                        /** Format: uuid */
+                        siteId?: string;
                         siteName: string;
                         startedAt: string;
                         endedAt: string | null;
+                        /** @enum {string} */
+                        status: "CURRENT" | "FUTURE" | "ENDED";
+                        isAccessible?: boolean;
                         /** Format: uuid */
-                        assignedByUserId: string;
+                        assignedByUserId?: string;
+                        endedByUserId?: string | null;
                         clientCommandId?: string | null;
                         createdAt: string;
                     }[];
@@ -7118,12 +7375,20 @@ export interface operations {
                         /** Format: uuid */
                         floorId: string;
                         floorName: string;
+                        /** Format: uuid */
+                        buildingId?: string;
                         buildingName: string;
+                        /** Format: uuid */
+                        siteId?: string;
                         siteName: string;
                         startedAt: string;
                         endedAt: string | null;
+                        /** @enum {string} */
+                        status: "CURRENT" | "FUTURE" | "ENDED";
+                        isAccessible?: boolean;
                         /** Format: uuid */
-                        assignedByUserId: string;
+                        assignedByUserId?: string;
+                        endedByUserId?: string | null;
                         clientCommandId?: string | null;
                         createdAt: string;
                     };
@@ -7177,7 +7442,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description Space period overlap or command idempotency payload conflict. */
+            /** @description Space period overlap, historical rewrite conflict, or command idempotency payload conflict. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -7186,6 +7451,212 @@ export interface operations {
                     "application/json": {
                         error: string;
                         message?: string;
+                    };
+                };
+            };
+        };
+    };
+    endAssignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    endedAt?: string;
+                    clientCommandId?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Time-bounded space assignment details with employee and candidate space context. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id: string;
+                        /** Format: uuid */
+                        placementIdentityId: string;
+                        /** Format: uuid */
+                        employeeId: string;
+                        employeeName: string;
+                        employeeCode: string;
+                        employeeEmail?: string | null;
+                        departmentName?: string | null;
+                        spaceLabel?: string | null;
+                        /** Format: uuid */
+                        floorId: string;
+                        floorName: string;
+                        /** Format: uuid */
+                        buildingId?: string;
+                        buildingName: string;
+                        /** Format: uuid */
+                        siteId?: string;
+                        siteName: string;
+                        startedAt: string;
+                        endedAt: string | null;
+                        /** @enum {string} */
+                        status: "CURRENT" | "FUTURE" | "ENDED";
+                        isAccessible?: boolean;
+                        /** Format: uuid */
+                        assignedByUserId?: string;
+                        endedByUserId?: string | null;
+                        clientCommandId?: string | null;
+                        createdAt: string;
+                    };
+                };
+            };
+            /** @description Invalid assignment parameters or non-assignable space. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: string;
+                        message?: string;
+                    };
+                };
+            };
+            /** @description Not authenticated or session expired/revoked. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "unauthorized";
+                    };
+                };
+            };
+            /** @description Caller lacks the required role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "forbidden";
+                    };
+                };
+            };
+            /** @description Target entity not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: string;
+                        message?: string;
+                    };
+                };
+            };
+            /** @description Space period overlap, historical rewrite conflict, or command idempotency payload conflict. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: string;
+                        message?: string;
+                    };
+                };
+            };
+        };
+    };
+    getAssignmentHistory: {
+        parameters: {
+            query?: {
+                employeeId?: string;
+                placementIdentityId?: string;
+                floorId?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated historical assignment records. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        total: number;
+                        limit: number;
+                        offset: number;
+                        items: {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            placementIdentityId: string;
+                            /** Format: uuid */
+                            employeeId: string;
+                            employeeName: string;
+                            employeeCode: string;
+                            employeeEmail?: string | null;
+                            departmentName?: string | null;
+                            spaceLabel?: string | null;
+                            /** Format: uuid */
+                            floorId: string;
+                            floorName: string;
+                            /** Format: uuid */
+                            buildingId?: string;
+                            buildingName: string;
+                            /** Format: uuid */
+                            siteId?: string;
+                            siteName: string;
+                            startedAt: string;
+                            endedAt: string | null;
+                            /** @enum {string} */
+                            status: "CURRENT" | "FUTURE" | "ENDED";
+                            isAccessible?: boolean;
+                            /** Format: uuid */
+                            assignedByUserId?: string;
+                            endedByUserId?: string | null;
+                            clientCommandId?: string | null;
+                            createdAt: string;
+                        }[];
+                    };
+                };
+            };
+            /** @description Not authenticated or session expired/revoked. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "unauthorized";
+                    };
+                };
+            };
+            /** @description Caller lacks the required role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "forbidden";
                     };
                 };
             };

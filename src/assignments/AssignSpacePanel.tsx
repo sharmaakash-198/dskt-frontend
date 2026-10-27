@@ -6,6 +6,7 @@ import {
   type EmployeeDirectoryItem,
 } from '../workforce/api';
 import {
+  classifyAssignmentState,
   createAssignment,
   listAssignments,
   type Assignment,
@@ -399,17 +400,23 @@ export function AssignSpacePanel({
                   </p>
                 ) : (
                   <ul className="assignment-mini-list" aria-label="Selected employee existing assignments">
-                    {employeeAssignments.map((a) => (
-                      <li key={a.id} className="assignment-mini-item" data-testid={`emp-assignment-${a.id}`}>
-                        <div className="assignment-details">
-                          <strong>{a.spaceLabel ?? 'Space'}</strong> ({a.siteName} / {a.buildingName} / {a.floorName})
-                        </div>
-                        <span className="period-badge">
-                          {new Date(a.startedAt).toLocaleDateString()}
-                          {a.endedAt ? ` – ${new Date(a.endedAt).toLocaleDateString()}` : ' – Ongoing'}
-                        </span>
-                      </li>
-                    ))}
+                    {employeeAssignments.map((a) => {
+                      const status = a.status || classifyAssignmentState(a);
+                      return (
+                        <li key={a.id} className="assignment-mini-item" data-testid={`emp-assignment-${a.id}`}>
+                          <div className="assignment-details">
+                            <span className={`status-badge ${status.toLowerCase()}`} data-testid={`emp-assignment-status-${a.id}`} style={{ marginRight: '6px' }}>
+                              {status}
+                            </span>
+                            <strong>{a.spaceLabel ?? 'Space'}</strong> ({a.siteName} / {a.buildingName} / {a.floorName})
+                          </div>
+                          <span className="period-badge">
+                            {new Date(a.startedAt).toLocaleDateString()}
+                            {a.endedAt ? ` – ${new Date(a.endedAt).toLocaleDateString()}` : ' – Ongoing'}
+                          </span>
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </div>
