@@ -330,22 +330,25 @@ export function BoundaryEditor({
     };
   }, [floorId, revision.id, revision.placements]);
 
-  const [appliedInitialPlacementId, setAppliedInitialPlacementId] = useState<string | null>(null);
-  if (initialPlacementIdentityId !== appliedInitialPlacementId) {
-    if (initialPlacementIdentityId && placements.length > 0) {
-      const target = placements.find(
-        (p) => p.placementIdentityId === initialPlacementIdentityId || p.id === initialPlacementIdentityId,
-      );
-      if (target) {
-        setAppliedInitialPlacementId(initialPlacementIdentityId);
-        setSelectedPlacementId(target.id);
-        setEditX(String(target.positionX));
-        setEditY(String(target.positionY));
-        setEditRotation(target.rotationDegrees);
-        setEditLabel(target.label ?? '');
-      }
-    } else if (!initialPlacementIdentityId) {
-      setAppliedInitialPlacementId(null);
+  const [prevTargetId, setPrevTargetId] = useState<string | null | undefined>(initialPlacementIdentityId);
+  const [hasAppliedInitial, setHasAppliedInitial] = useState(false);
+
+  if (initialPlacementIdentityId !== prevTargetId) {
+    setPrevTargetId(initialPlacementIdentityId);
+    setHasAppliedInitial(false);
+  }
+
+  if (initialPlacementIdentityId && !hasAppliedInitial && placements.length > 0) {
+    const target = placements.find(
+      (p) => p.placementIdentityId === initialPlacementIdentityId || p.id === initialPlacementIdentityId,
+    );
+    if (target) {
+      setHasAppliedInitial(true);
+      setSelectedPlacementId(target.id);
+      setEditX(String(target.positionX));
+      setEditY(String(target.positionY));
+      setEditRotation(target.rotationDegrees);
+      setEditLabel(target.label ?? '');
     }
   }
 
