@@ -10,6 +10,7 @@ import {
   type FloorPlan,
   type FloorPlanRevision,
 } from './floor-plan-api';
+import { BatchLabelPanel } from './BatchLabelPanel';
 import { BoundaryEditor } from './BoundaryEditor';
 
 const EDITING_SCALES = [1, 2, 4, 8, 16, 32, 64, 128, 256];
@@ -19,6 +20,7 @@ export type FloorWorkspaceProps = {
   building: Building;
   floor: Floor;
   canMutate?: boolean;
+  isPlanner?: boolean;
   onBack: () => void;
 };
 
@@ -27,11 +29,13 @@ export function FloorWorkspace({
   building,
   floor,
   canMutate = false,
+  isPlanner = false,
   onBack,
 }: FloorWorkspaceProps) {
   const [floorPlan, setFloorPlan] = useState<FloorPlan | null>(null);
   const [publishedRevision, setPublishedRevision] = useState<FloorPlanRevision | null>(null);
   const [revisions, setRevisions] = useState<FloorPlanRevision[]>([]);
+  const [showBatchLabeling, setShowBatchLabeling] = useState(false);
   const isPropArchived = Boolean(
     (floor as { archivedAt?: string | null }).archivedAt ||
     (building as { archivedAt?: string | null }).archivedAt ||
@@ -308,12 +312,49 @@ export function FloorWorkspace({
           {effectiveViewMode === 'PUBLISHED' && activePublishedRev && (
             <>
               <div className="published-summary" role="region" aria-label="Published revision details">
-                <h3>Published Floor Plan Active</h3>
-                <p>
-                  Revision {activePublishedRev.revisionNumber} is Published at scale{' '}
-                  {activePublishedRev.editingScale}x (Version {activePublishedRev.concurrencyVersion}).
-                </p>
+                <div className="published-summary-header">
+                  <div>
+                    <h3>Published Floor Plan Active</h3>
+                    <p>
+                      Revision {activePublishedRev.revisionNumber} is Published at scale{' '}
+                      {activePublishedRev.editingScale}x (Version {activePublishedRev.concurrencyVersion}).
+                    </p>
+                  </div>
+                  {isPlanner && !showBatchLabeling && (
+                    <button
+                      type="button"
+                      className="primary-button batch-label-toggle-btn"
+                      onClick={() => setShowBatchLabeling(true)}
+                      data-testid="open-batch-labeling-btn"
+                    >
+                      Batch Label Spaces
+                    </button>
+                  )}
+                </div>
               </div>
+
+              {isPlanner && showBatchLabeling && (
+                <BatchLabelPanel
+                  floorId={floor.id}
+                  revision={activePublishedRev}
+                  isPlanner={isPlanner}
+                  onLabelsApplied={async () => {
+                    try {
+                      const revsRes = await listFloorPlanRevisions(api, floor.id);
+                      if (revsRes.ok) {
+                        setRevisions(revsRes.revisions);
+                        const pub = revsRes.revisions.find((r) => r.lifecycleState === 'PUBLISHED');
+                        if (pub) {
+                          setPublishedRevision(pub);
+                        }
+                      }
+                    } catch {
+                      // ignore
+                    }
+                  }}
+                  onClose={() => setShowBatchLabeling(false)}
+                />
+              )}
 
               <BoundaryEditor
                 floorId={floor.id}

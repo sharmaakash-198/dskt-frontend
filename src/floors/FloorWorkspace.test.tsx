@@ -505,4 +505,134 @@ describe('FloorWorkspace', () => {
       expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
     });
   });
+
+  describe('Ticket 25: Batch Labeling in Published Map', () => {
+    const publishedRev = {
+      id: 'rev-published-batch',
+      floorPlanId: 'fp-1',
+      revisionNumber: 1,
+      lifecycleState: 'PUBLISHED' as const,
+      editingScale: 1,
+      concurrencyVersion: 1,
+      boundary: [
+        { x: 0, y: 0 },
+        { x: 1000, y: 0 },
+        { x: 1000, y: 1000 },
+        { x: 0, y: 1000 },
+      ],
+      placements: [
+        {
+          id: 'place-desk-1',
+          floorPlanRevisionId: 'rev-published-batch',
+          placementIdentityId: 'pi-1',
+          elementTemplateRevisionId: 'tmpl-rev-1',
+          templateId: 'tmpl-1',
+          templateCode: 'DESK',
+          templateName: 'Desk 1',
+          templateRevisionNumber: 1,
+          assignable: true,
+          spatialClass: 'PHYSICAL' as const,
+          borderColor: '#1e3a8a',
+          fillColor: '#93c5fd',
+          positionX: 100,
+          positionY: 100,
+          rotationDegrees: 0,
+          label: null,
+          vertices: [
+            { x: 100, y: 100 },
+            { x: 200, y: 100 },
+            { x: 200, y: 160 },
+            { x: 100, y: 160 },
+          ],
+          localVertices: [
+            { x: 0, y: 0 },
+            { x: 100, y: 0 },
+            { x: 100, y: 60 },
+            { x: 0, y: 60 },
+          ],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    it('shows Batch Label Spaces button for Workplace Planner and opens panel', async () => {
+      get.mockImplementation(async (path: string) => {
+        if (path === '/floors/{floorId}/floor-plan') {
+          return {
+            data: {
+              floorPlan: { id: 'fp-1', floorId: floor.id },
+              activeRevision: publishedRev,
+              publishedRevision: publishedRev,
+            },
+            response: jsonResponse(200),
+          };
+        }
+        if (path === '/floors/{floorId}/floor-plan/revisions') {
+          return {
+            data: { revisions: [publishedRev] },
+            response: jsonResponse(200),
+          };
+        }
+        return { data: {}, response: jsonResponse(200) };
+      });
+
+      render(
+        <FloorWorkspace
+          site={site}
+          building={building}
+          floor={floor}
+          canMutate={false}
+          isPlanner={true}
+          onBack={() => undefined}
+        />,
+      );
+
+      const batchBtn = await screen.findByTestId('open-batch-labeling-btn');
+      expect(batchBtn).toBeInTheDocument();
+
+      fireEvent.click(batchBtn);
+
+      expect(await screen.findByTestId('batch-label-panel')).toBeInTheDocument();
+      expect(screen.getByRole('region', { name: /batch label spaces/i })).toBeInTheDocument();
+    });
+
+    it('does not show Batch Label Spaces button for Viewer or non-planner', async () => {
+      get.mockImplementation(async (path: string) => {
+        if (path === '/floors/{floorId}/floor-plan') {
+          return {
+            data: {
+              floorPlan: { id: 'fp-1', floorId: floor.id },
+              activeRevision: publishedRev,
+              publishedRevision: publishedRev,
+            },
+            response: jsonResponse(200),
+          };
+        }
+        if (path === '/floors/{floorId}/floor-plan/revisions') {
+          return {
+            data: { revisions: [publishedRev] },
+            response: jsonResponse(200),
+          };
+        }
+        return { data: {}, response: jsonResponse(200) };
+      });
+
+      render(
+        <FloorWorkspace
+          site={site}
+          building={building}
+          floor={floor}
+          canMutate={false}
+          isPlanner={false}
+          onBack={() => undefined}
+        />,
+      );
+
+      expect(await screen.findByText(/Published Floor Plan Active/i)).toBeInTheDocument();
+      expect(screen.queryByTestId('open-batch-labeling-btn')).not.toBeInTheDocument();
+    });
+  });
 });

@@ -1439,3 +1439,283 @@ select {
   margin-top: 8px;
 }
 
+/* ==========================================================================
+   Batch Labeling Panel & Preview
+   ========================================================================== */
+
+.published-summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.batch-label-toggle-btn {
+  white-space: nowrap;
+}
+
+.batch-label-panel {
+  margin: 16px 0;
+  padding: 20px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.batch-label-panel .panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 12px;
+}
+
+.batch-label-panel .panel-header h3 {
+  margin: 0 0 4px 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.batch-label-panel .panel-subtitle {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.batch-label-form .config-fieldset {
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.batch-label-form .config-fieldset legend {
+  font-weight: 600;
+  font-size: 13px;
+  padding: 0 6px;
+  color: var(--ink-2);
+}
+
+.batch-label-form .form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.space-selection-section {
+  margin-bottom: 20px;
+}
+
+.selection-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.selection-toolbar h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.selection-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.batch-spaces-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px 0;
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+}
+
+.batch-space-item {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface);
+  transition: background-color 0.1s ease;
+}
+
+.batch-space-item:last-child {
+  border-bottom: none;
+}
+
+.batch-space-item:hover {
+  background: var(--surface-hover);
+}
+
+.batch-space-item.selected {
+  background: rgba(37, 99, 235, 0.05);
+}
+
+.batch-space-item.ineligible {
+  opacity: 0.65;
+}
+
+.batch-space-item .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  width: 100%;
+}
+
+.spatial-class-tag {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.spatial-class-tag.spatial-physical {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.spatial-class-tag.spatial-zone {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.spatial-class-tag.spatial-obstacle {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.coordinates-tag {
+  font-size: 12px;
+  color: var(--ink-3);
+  font-family: monospace;
+}
+
+.current-label-tag {
+  font-size: 12px;
+  color: var(--ink-2);
+  margin-left: auto;
+}
+
+/* Conflicts Panel */
+.conflicts-panel {
+  background: var(--crit-soft);
+  border: 1px solid var(--crit);
+  border-radius: 6px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.conflicts-panel h4 {
+  margin: 0 0 6px 0;
+  color: var(--crit);
+  font-size: 14px;
+}
+
+.conflict-help-text {
+  margin: 0 0 10px 0;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.conflicts-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.conflict-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.conflict-type-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--crit);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.conflict-message {
+  color: var(--ink-1);
+}
+
+/* Preview Proposal Section */
+.preview-proposal-section {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 20px;
+  margin-top: 10px;
+}
+
+.preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.preview-header h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.concurrency-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: #f3f4f6;
+  color: #4b5563;
+  font-weight: 500;
+}
+
+.preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 20px;
+  font-size: 13px;
+}
+
+.preview-table th,
+.preview-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.preview-table th {
+  background: var(--surface-subtle);
+  font-weight: 600;
+}
+
+.proposed-label-text {
+  color: #1e40af;
+  background: #eff6ff;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.no-label-text {
+  color: var(--ink-4);
+}
+
+.confirmation-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+

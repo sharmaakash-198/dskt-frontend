@@ -9,6 +9,7 @@ import { archiveSite, createSite, listSites, updateSite, type Site } from './api
 
 export type SitesPanelProps = {
   canMutate: boolean;
+  isPlanner?: boolean;
 };
 
 type LocationView =
@@ -17,7 +18,7 @@ type LocationView =
   | { level: 'floors'; site: Site; building: Building }
   | { level: 'floor'; site: Site; building: Building; floor: Floor };
 
-export function SitesPanel({ canMutate }: SitesPanelProps) {
+export function SitesPanel({ canMutate, isPlanner = false }: SitesPanelProps) {
   const [view, setView] = useState<LocationView>({ level: 'sites' });
   const [sites, setSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(true);
@@ -110,6 +111,7 @@ export function SitesPanel({ canMutate }: SitesPanelProps) {
         building={view.building}
         floor={view.floor}
         canMutate={canMutate}
+        isPlanner={isPlanner}
         onBack={() =>
           setView({ level: 'floors', site: view.site, building: view.building })
         }

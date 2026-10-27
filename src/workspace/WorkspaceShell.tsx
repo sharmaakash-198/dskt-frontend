@@ -136,6 +136,7 @@ export function WorkspaceShell({
                   canMutate={
                     selected === 'facilities' && session.roles.includes('FACILITIES_ADMIN')
                   }
+                  isPlanner={session.roles.includes('WORKPLACE_PLANNER')}
                 />
                 <TemplatesCatalog
                   canMutate={

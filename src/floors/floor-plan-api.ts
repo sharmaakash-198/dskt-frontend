@@ -119,6 +119,10 @@ const ERROR_COPY: Record<string, string> = {
   invalid_rotation: 'Rotation must be a quarter turn (0, 90, 180, or 270 degrees).',
   invalid_coordinates: 'Coordinates must be integers in 10-cm world units.',
   duplicate_label: 'A space with this label already exists on this floor plan revision.',
+  revision_not_published: 'Batch labeling requires a Published floor plan revision.',
+  stale_revision: 'This revision was updated concurrently. Refresh and review proposed labels again.',
+  invalid_preview_token: 'The preview token is invalid or has expired. Generate a new preview.',
+  label_collision: 'A proposed label collides with an existing placement.',
   placement_not_found: 'That placed space was not found.',
   publication_validation_failed: 'Publication validation failed. Resolve all blockers before publishing.',
   forbidden: 'You cannot manage floor plans or boundaries.',
@@ -789,4 +793,156 @@ export async function publishFloorPlanRevision(
     return { ok: false, error: 'Could not publish floor plan revision.' };
   }
 }
+
+export type OrderingStrategy = 'SELECTION' | 'ROW_MAJOR' | 'COLUMN_MAJOR';
+
+export type ProposedLabelView = {
+  placementId: string;
+  placementIdentityId: string;
+  currentLabel: string | null;
+  proposedLabel: string;
+  positionX: number;
+  positionY: number;
+};
+
+export type LabelConflictType = 'duplicate' | 'collision' | 'ineligible_space' | 'stale_revision';
+
+export type LabelConflict = {
+  type: LabelConflictType;
+  placementId?: string;
+  label?: string;
+  message: string;
+};
+
+export type PreviewBatchLabelsInput = {
+  placementIds: string[];
+  prefix: string;
+  startNumber: number;
+  width: number;
+  ordering: OrderingStrategy;
+  concurrencyVersion: number;
+};
+
+export type PreviewBatchLabelsResult =
+  | {
+      ok: true;
+      previewToken: string;
+      concurrencyVersion: number;
+      proposedLabels: ProposedLabelView[];
+      conflicts: LabelConflict[];
+      canConfirm: boolean;
+    }
+  | {
+      ok: false;
+      error: string;
+      errorCode?: string;
+      conflicts?: LabelConflict[];
+      isConflict?: boolean;
+      currentConcurrencyVersion?: number;
+    };
+
+export type ConfirmBatchLabelsInput = {
+  previewToken: string;
+  concurrencyVersion: number;
+  assignments: { placementId: string; label: string }[];
+  clientCommandId: string;
+};
+
+export type ConfirmBatchLabelsResult =
+  | {
+      ok: true;
+      revisionId: string;
+      updatedCount: number;
+      concurrencyVersion: number;
+    }
+  | {
+      ok: false;
+      error: string;
+      errorCode?: string;
+      isConflict?: boolean;
+      currentConcurrencyVersion?: number;
+    };
+
+export async function previewBatchLabels(
+  client: Client<paths>,
+  floorId: string,
+  revisionId: string,
+  input: PreviewBatchLabelsInput,
+): Promise<PreviewBatchLabelsResult> {
+  try {
+    const { data, response } = await client.POST(
+      '/floors/{floorId}/floor-plan/revisions/{revisionId}/batch-labels/preview',
+      {
+        params: {
+          path: { floorId, revisionId },
+        },
+        body: input,
+      },
+    );
+
+    if (response.ok && data && 'previewToken' in data) {
+      return {
+        ok: true,
+        previewToken: data.previewToken,
+        concurrencyVersion: data.concurrencyVersion,
+        proposedLabels: data.proposedLabels as ProposedLabelView[],
+        conflicts: data.conflicts as LabelConflict[],
+        canConfirm: data.canConfirm,
+      };
+    }
+
+    const conflict = extractConflictMeta(response, data);
+    const conflicts =
+      data && typeof data === 'object' && 'conflicts' in data && Array.isArray((data as { conflicts?: unknown }).conflicts)
+        ? ((data as { conflicts: LabelConflict[] }).conflicts)
+        : undefined;
+
+    return {
+      ok: false,
+      error: floorPlanErrorMessage(data, 'Could not generate batch label preview.'),
+      conflicts,
+      ...conflict,
+    };
+  } catch {
+    return { ok: false, error: 'Could not generate batch label preview.' };
+  }
+}
+
+export async function confirmBatchLabels(
+  client: Client<paths>,
+  floorId: string,
+  revisionId: string,
+  input: ConfirmBatchLabelsInput,
+): Promise<ConfirmBatchLabelsResult> {
+  try {
+    const { data, response } = await client.POST(
+      '/floors/{floorId}/floor-plan/revisions/{revisionId}/batch-labels/confirm',
+      {
+        params: {
+          path: { floorId, revisionId },
+        },
+        body: input,
+      },
+    );
+
+    if (response.ok && data && 'revisionId' in data) {
+      return {
+        ok: true,
+        revisionId: data.revisionId,
+        updatedCount: data.updatedCount,
+        concurrencyVersion: data.concurrencyVersion,
+      };
+    }
+
+    const conflict = extractConflictMeta(response, data);
+    return {
+      ok: false,
+      error: floorPlanErrorMessage(data, 'Could not apply batch labels.'),
+      ...conflict,
+    };
+  } catch {
+    return { ok: false, error: 'Could not apply batch labels.' };
+  }
+}
+
 

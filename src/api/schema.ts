@@ -736,6 +736,46 @@ export interface paths {
         patch: operations["updatePlacedElement"];
         trace?: never;
     };
+    "/floors/{floorId}/floor-plan/revisions/{revisionId}/batch-labels/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate deterministic batch label proposal for selected Published physical spaces
+         * @description Proposes sequential labels according to prefix, starting number, width, and ordering strategy without mutating placement records. Detects duplicate, collision, ineligible-space, and stale-revision conflicts.
+         */
+        post: operations["previewBatchLabels"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/floors/{floorId}/floor-plan/revisions/{revisionId}/batch-labels/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply accepted preview batch labels transactionally and idempotently
+         * @description Applies the exact accepted preview labels to Published physical spaces in a single transaction. Enforces concurrency control, preview token validation, idempotency via clientCommandId, and audit logging.
+         */
+        post: operations["confirmBatchLabels"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/element-categories": {
         parameters: {
             query?: never;
@@ -3073,7 +3113,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -3325,7 +3365,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -3452,7 +3492,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -3581,7 +3621,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -3733,7 +3773,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -3906,7 +3946,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -4043,7 +4083,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -4135,7 +4175,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -4229,7 +4269,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -4326,7 +4366,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -4409,7 +4449,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -4504,7 +4544,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -4679,7 +4719,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -4850,7 +4890,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -4957,7 +4997,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -5113,7 +5153,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -5230,7 +5270,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
@@ -5384,7 +5424,270 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        currentConcurrencyVersion?: number;
+                    };
+                };
+            };
+        };
+    };
+    previewBatchLabels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                floorId: string;
+                revisionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    placementIds: string[];
+                    prefix: string;
+                    startNumber: number;
+                    width: number;
+                    /** @enum {string} */
+                    ordering: "SELECTION" | "ROW_MAJOR" | "COLUMN_MAJOR";
+                    concurrencyVersion: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {boolean} */
+                        ok: true;
+                        previewToken: string;
+                        concurrencyVersion: number;
+                        proposedLabels: {
+                            placementId: string;
+                            placementIdentityId: string;
+                            currentLabel: string | null;
+                            proposedLabel: string;
+                            positionX: number;
+                            positionY: number;
+                        }[];
+                        conflicts: {
+                            /** @enum {string} */
+                            type: "duplicate" | "collision" | "ineligible_space" | "stale_revision";
+                            placementId?: string;
+                            label?: string;
+                            message: string;
+                        }[];
+                        canConfirm: boolean;
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: string;
+                        diagnostics?: {
+                            code: string;
+                            message: string;
+                            vertexIndex?: number;
+                            edgeIndex?: number;
+                        }[];
+                        validationErrors?: {
+                            code: string;
+                            /** @enum {string} */
+                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE";
+                            /** @enum {string} */
+                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR";
+                            entityId: string;
+                            conflictingEntityId?: string;
+                            message: string;
+                            correctiveAction: string;
+                            vertexIndex?: number;
+                            edgeIndex?: number;
+                            details?: {
+                                [key: string]: unknown;
+                            };
+                        }[];
+                    };
+                };
+            };
+            /** @description Not authenticated or session expired/revoked. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "unauthorized";
+                    };
+                };
+            };
+            /** @description Authenticated but missing a required application role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "forbidden";
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "published_revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
+                        currentConcurrencyVersion?: number;
+                    };
+                };
+            };
+        };
+    };
+    confirmBatchLabels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                floorId: string;
+                revisionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    previewToken: string;
+                    concurrencyVersion: number;
+                    assignments: {
+                        /** Format: uuid */
+                        placementId: string;
+                        label: string;
+                    }[];
+                    clientCommandId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {boolean} */
+                        ok: true;
+                        /** Format: uuid */
+                        revisionId: string;
+                        updatedCount: number;
+                        concurrencyVersion: number;
+                    };
+                };
+            };
+            /** @description Default Response */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: string;
+                        diagnostics?: {
+                            code: string;
+                            message: string;
+                            vertexIndex?: number;
+                            edgeIndex?: number;
+                        }[];
+                        validationErrors?: {
+                            code: string;
+                            /** @enum {string} */
+                            category: "BOUNDARY" | "CONTAINMENT" | "COLLISION" | "TEMPLATE" | "LABEL" | "LIFECYCLE";
+                            /** @enum {string} */
+                            entityType: "BOUNDARY" | "PLACEMENT" | "REVISION" | "FLOOR";
+                            entityId: string;
+                            conflictingEntityId?: string;
+                            message: string;
+                            correctiveAction: string;
+                            vertexIndex?: number;
+                            edgeIndex?: number;
+                            details?: {
+                                [key: string]: unknown;
+                            };
+                        }[];
+                    };
+                };
+            };
+            /** @description Not authenticated or session expired/revoked. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "unauthorized";
+                    };
+                };
+            };
+            /** @description Authenticated but missing a required application role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "forbidden";
+                    };
+                };
+            };
+            /** @description Default Response */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "floor_not_found" | "floor_plan_not_found" | "revision_not_found" | "published_revision_not_found" | "template_revision_not_found" | "placement_not_found" | "lease_not_found";
+                    };
+                };
+            };
+            /** @description Default Response */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "floor_archived" | "building_archived" | "site_archived" | "template_archived" | "floor_plan_already_exists" | "revision_not_draft" | "revision_not_published" | "stale_revision" | "invalid_preview_token" | "label_collision" | "concurrency_conflict" | "duplicate_label" | "lease_conflict" | "lease_invalid_token" | "lease_expired" | "command_id_payload_mismatch";
                         currentConcurrencyVersion?: number;
                     };
                 };
