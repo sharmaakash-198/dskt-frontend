@@ -10,6 +10,8 @@ import {
   type FloorPlan,
   type FloorPlanRevision,
 } from './floor-plan-api';
+import { AssignSpacePanel } from '../assignments/AssignSpacePanel';
+import { listAssignments, type Assignment } from '../assignments/api';
 import { BatchLabelPanel } from './BatchLabelPanel';
 import { BoundaryEditor } from './BoundaryEditor';
 
@@ -36,6 +38,9 @@ export function FloorWorkspace({
   const [publishedRevision, setPublishedRevision] = useState<FloorPlanRevision | null>(null);
   const [revisions, setRevisions] = useState<FloorPlanRevision[]>([]);
   const [showBatchLabeling, setShowBatchLabeling] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [selectedCandidatePlacementId, setSelectedCandidatePlacementId] = useState<string | null>(null);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
   const isPropArchived = Boolean(
     (floor as { archivedAt?: string | null }).archivedAt ||
     (building as { archivedAt?: string | null }).archivedAt ||
@@ -149,6 +154,24 @@ export function FloorWorkspace({
   const draftRevision = revisions.find((r) => r.lifecycleState === 'DRAFT');
   const activePublishedRev = publishedRevision ?? revisions.find((r) => r.lifecycleState === 'PUBLISHED') ?? null;
   const hasRevisions = revisions.length > 0;
+
+  // Load assignments for active published floor plan
+  useEffect(() => {
+    if (!activePublishedRev) return;
+
+    let cancelled = false;
+    async function fetchFloorAssignments() {
+      const res = await listAssignments(api, { floorId: floor.id });
+      if (!cancelled && res.ok && Array.isArray(res.assignments)) {
+        setAssignments(res.assignments);
+      }
+    }
+
+    void fetchFloorAssignments();
+    return () => {
+      cancelled = true;
+    };
+  }, [floor.id, activePublishedRev, reloadKey]);
 
   // Determine active view mode
   const effectiveViewMode = !canMutate ? 'PUBLISHED' : (viewMode === 'DRAFT' && draftRevision ? 'DRAFT' : (activePublishedRev ? viewMode : 'DRAFT'));
@@ -320,18 +343,57 @@ export function FloorWorkspace({
                       {activePublishedRev.editingScale}x (Version {activePublishedRev.concurrencyVersion}).
                     </p>
                   </div>
-                  {isPlanner && !showBatchLabeling && (
-                    <button
-                      type="button"
-                      className="primary-button batch-label-toggle-btn"
-                      onClick={() => setShowBatchLabeling(true)}
-                      data-testid="open-batch-labeling-btn"
-                    >
-                      Batch Label Spaces
-                    </button>
+                  {isPlanner && (
+                    <div className="planner-actions-group" style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        type="button"
+                        className="primary-button assign-space-toggle-btn"
+                        onClick={() => {
+                          setSelectedCandidatePlacementId(null);
+                          setShowAssignModal(true);
+                          setShowBatchLabeling(false);
+                        }}
+                        data-testid="open-assign-space-btn"
+                      >
+                        Assign Space
+                      </button>
+                      {!showBatchLabeling && (
+                        <button
+                          type="button"
+                          className="secondary-button batch-label-toggle-btn"
+                          onClick={() => {
+                            setShowBatchLabeling(true);
+                            setShowAssignModal(false);
+                          }}
+                          data-testid="open-batch-labeling-btn"
+                        >
+                          Batch Label Spaces
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
+
+              {isPlanner && showAssignModal && activePublishedRev && (
+                <AssignSpacePanel
+                  floorId={floor.id}
+                  floorName={floor.name}
+                  buildingName={building.name}
+                  siteName={site.name}
+                  revision={activePublishedRev}
+                  placements={activePublishedRev.placements ?? []}
+                  initialPlacementId={selectedCandidatePlacementId}
+                  onAssignmentCreated={(newAssignment) => {
+                    setAssignments((prev) => [
+                      newAssignment,
+                      ...prev.filter((a) => a.id !== newAssignment.id),
+                    ]);
+                    setShowAssignModal(false);
+                  }}
+                  onClose={() => setShowAssignModal(false)}
+                />
+              )}
 
               {isPlanner && showBatchLabeling && (
                 <BatchLabelPanel
@@ -360,6 +422,13 @@ export function FloorWorkspace({
                 floorId={floor.id}
                 revision={activePublishedRev}
                 canMutate={false}
+                isPlanner={isPlanner}
+                assignments={assignments}
+                onOpenAssignSpace={(placementId) => {
+                  setSelectedCandidatePlacementId(placementId);
+                  setShowAssignModal(true);
+                  setShowBatchLabeling(false);
+                }}
                 onRevisionUpdated={handleRevisionUpdated}
                 onError={setErrorMessage}
               />

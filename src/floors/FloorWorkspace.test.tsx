@@ -633,6 +633,122 @@ describe('FloorWorkspace', () => {
 
       expect(await screen.findByText(/Published Floor Plan Active/i)).toBeInTheDocument();
       expect(screen.queryByTestId('open-batch-labeling-btn')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('open-assign-space-btn')).not.toBeInTheDocument();
+    });
+
+    it('allows Workplace Planner to open the Assign Space workflow from the published header', async () => {
+      get.mockImplementation(async (path: string) => {
+        if (path === '/floors/{floorId}/floor-plan') {
+          return {
+            data: {
+              floorPlan: { id: 'fp-1', floorId: floor.id },
+              activeRevision: publishedRev,
+              publishedRevision: publishedRev,
+            },
+            response: jsonResponse(200),
+          };
+        }
+        if (path === '/floors/{floorId}/floor-plan/revisions') {
+          return {
+            data: { revisions: [publishedRev] },
+            response: jsonResponse(200),
+          };
+        }
+        if (path === '/assignments') {
+          return { data: [], response: jsonResponse(200) };
+        }
+        return { data: {}, response: jsonResponse(200) };
+      });
+
+      render(
+        <FloorWorkspace
+          site={site}
+          building={building}
+          floor={floor}
+          canMutate={false}
+          isPlanner={true}
+          onBack={() => undefined}
+        />,
+      );
+
+      const assignBtn = await screen.findByTestId('open-assign-space-btn');
+      expect(assignBtn).toBeInTheDocument();
+
+      fireEvent.click(assignBtn);
+
+      expect(await screen.findByTestId('assign-space-panel')).toBeInTheDocument();
+      expect(screen.getByRole('region', { name: /assign space to employee/i })).toBeInTheDocument();
+    });
+
+    it('shows vacancy or current assignment and allow assigning when inspecting an assignable space', async () => {
+      get.mockImplementation(async (path: string) => {
+        if (path === '/floors/{floorId}/floor-plan') {
+          return {
+            data: {
+              floorPlan: { id: 'fp-1', floorId: floor.id },
+              activeRevision: publishedRev,
+              publishedRevision: publishedRev,
+            },
+            response: jsonResponse(200),
+          };
+        }
+        if (path === '/floors/{floorId}/floor-plan/revisions') {
+          return {
+            data: { revisions: [publishedRev] },
+            response: jsonResponse(200),
+          };
+        }
+        if (path === '/assignments') {
+          return {
+            data: [
+              {
+                id: 'assign-1',
+                placementIdentityId: 'pi-1',
+                employeeId: 'emp-1',
+                employeeName: 'Jane Doe',
+                employeeCode: 'EMP-999',
+                spaceLabel: 'Space 1',
+                floorId: floor.id,
+                floorName: floor.name,
+                buildingName: building.name,
+                siteName: site.name,
+                startedAt: '2026-10-01T09:00:00.000Z',
+                endedAt: null,
+                assignedByUserId: 'user-1',
+                createdAt: '2026-10-01T09:00:00.000Z',
+              },
+            ],
+            response: jsonResponse(200),
+          };
+        }
+        return { data: {}, response: jsonResponse(200) };
+      });
+
+      render(
+        <FloorWorkspace
+          site={site}
+          building={building}
+          floor={floor}
+          canMutate={false}
+          isPlanner={true}
+          onBack={() => undefined}
+        />,
+      );
+
+      // Select placement 1
+      const selectPlacementBtn = await screen.findByRole('button', { name: /Select Desk 1/i });
+      fireEvent.click(selectPlacementBtn);
+
+      // Verify assignment status in inspector
+      const statusSection = await screen.findByTestId('placement-assignment-status');
+      expect(statusSection).toHaveTextContent('Jane Doe (EMP-999)');
+
+      // Verify assign space action button
+      const assignSpaceBtn = screen.getByTestId('assign-space-btn');
+      expect(assignSpaceBtn).toBeInTheDocument();
+      fireEvent.click(assignSpaceBtn);
+
+      expect(await screen.findByTestId('assign-space-panel')).toBeInTheDocument();
     });
   });
 });

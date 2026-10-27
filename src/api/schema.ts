@@ -1028,6 +1028,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List space assignments
+         * @description Query assignments filtered by employeeId, placementIdentityId, or floorId.
+         */
+        get: operations["listAssignments"];
+        put?: never;
+        /**
+         * Assign an employee to a space
+         * @description Create a time-bounded space assignment for an employee to an assignable space in the active Published floor plan revision. Enforces non-overlapping periods, idempotency, and audit logging.
+         */
+        post: operations["createAssignment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health/live": {
         parameters: {
             query?: never;
@@ -6976,6 +7000,192 @@ export interface operations {
                     "application/json": {
                         /** @enum {string} */
                         error: "not_found";
+                    };
+                };
+            };
+        };
+    };
+    listAssignments: {
+        parameters: {
+            query?: {
+                employeeId?: string;
+                placementIdentityId?: string;
+                floorId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id: string;
+                        /** Format: uuid */
+                        placementIdentityId: string;
+                        /** Format: uuid */
+                        employeeId: string;
+                        employeeName: string;
+                        employeeCode: string;
+                        employeeEmail?: string | null;
+                        departmentName?: string | null;
+                        spaceLabel?: string | null;
+                        /** Format: uuid */
+                        floorId: string;
+                        floorName: string;
+                        buildingName: string;
+                        siteName: string;
+                        startedAt: string;
+                        endedAt: string | null;
+                        /** Format: uuid */
+                        assignedByUserId: string;
+                        clientCommandId?: string | null;
+                        createdAt: string;
+                    }[];
+                };
+            };
+            /** @description Not authenticated or session expired/revoked. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "unauthorized";
+                    };
+                };
+            };
+            /** @description Caller lacks the required role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "forbidden";
+                    };
+                };
+            };
+        };
+    };
+    createAssignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    employeeId: string;
+                    /** Format: uuid */
+                    placementIdentityId: string;
+                    startedAt: string;
+                    endedAt?: string | null;
+                    clientCommandId?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Time-bounded space assignment details with employee and candidate space context. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id: string;
+                        /** Format: uuid */
+                        placementIdentityId: string;
+                        /** Format: uuid */
+                        employeeId: string;
+                        employeeName: string;
+                        employeeCode: string;
+                        employeeEmail?: string | null;
+                        departmentName?: string | null;
+                        spaceLabel?: string | null;
+                        /** Format: uuid */
+                        floorId: string;
+                        floorName: string;
+                        buildingName: string;
+                        siteName: string;
+                        startedAt: string;
+                        endedAt: string | null;
+                        /** Format: uuid */
+                        assignedByUserId: string;
+                        clientCommandId?: string | null;
+                        createdAt: string;
+                    };
+                };
+            };
+            /** @description Invalid assignment parameters or non-assignable space. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: string;
+                        message?: string;
+                    };
+                };
+            };
+            /** @description Not authenticated or session expired/revoked. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "unauthorized";
+                    };
+                };
+            };
+            /** @description Caller lacks the required role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "forbidden";
+                    };
+                };
+            };
+            /** @description Target entity not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: string;
+                        message?: string;
+                    };
+                };
+            };
+            /** @description Space period overlap or command idempotency payload conflict. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: string;
+                        message?: string;
                     };
                 };
             };

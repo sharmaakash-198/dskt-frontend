@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import type { Assignment } from '../assignments/api';
 import { api } from '../api/client';
 import {
   accessibleGeometrySummary,
@@ -81,6 +82,9 @@ export type BoundaryEditorProps = {
   floorId: string;
   revision: FloorPlanRevision;
   canMutate: boolean;
+  isPlanner?: boolean;
+  assignments?: Assignment[];
+  onOpenAssignSpace?: (placementId: string) => void;
   onRevisionUpdated: (updated: FloorPlanRevision) => void;
   onError: (message: string | null) => void;
 };
@@ -89,9 +93,13 @@ export function BoundaryEditor({
   floorId,
   revision,
   canMutate,
+  isPlanner = false,
+  assignments = [],
+  onOpenAssignSpace,
   onRevisionUpdated,
   onError,
 }: BoundaryEditorProps) {
+  const safeAssignments = Array.isArray(assignments) ? assignments : [];
   const initialVertices = revision.boundary && revision.boundary.length >= 4 ? revision.boundary : DEFAULT_BOUNDARY;
   const lastSavedVerticesRef = useRef<string>(JSON.stringify(initialVertices));
   const [vertices, setVertices] = useState<Vertex[]>(initialVertices);
@@ -2053,7 +2061,46 @@ export function BoundaryEditor({
               <span className="detail-label">Validation State</span>
               <span className="detail-value validation-badge valid">✓ Valid (Within boundary, no collisions)</span>
             </div>
+            {revision.lifecycleState === 'PUBLISHED' && selectedPlacement.assignable && (
+              <div className="detail-row" data-testid="placement-assignment-status">
+                <span className="detail-label">Current Assignment</span>
+                <span className="detail-value">
+                  {(() => {
+                    const activeAssignment = safeAssignments.find(
+                      (a) => a.placementIdentityId === selectedPlacement.placementIdentityId,
+                    );
+                    if (activeAssignment) {
+                      return (
+                        <>
+                          <strong>{activeAssignment.employeeName}</strong> ({activeAssignment.employeeCode})
+                          <span className="period-badge" style={{ marginLeft: '8px' }}>
+                            {new Date(activeAssignment.startedAt).toLocaleDateString()}
+                            {activeAssignment.endedAt
+                              ? ` – ${new Date(activeAssignment.endedAt).toLocaleDateString()}`
+                              : ' – Ongoing'}
+                          </span>
+                        </>
+                      );
+                    }
+                    return 'Vacant';
+                  })()}
+                </span>
+              </div>
+            )}
           </div>
+
+          {isPlanner && revision.lifecycleState === 'PUBLISHED' && selectedPlacement.assignable && onOpenAssignSpace && (
+            <div className="assign-space-action-section" style={{ marginTop: '12px' }}>
+              <button
+                type="button"
+                className="primary-button assign-space-btn"
+                onClick={() => onOpenAssignSpace(selectedPlacement.id)}
+                data-testid="assign-space-btn"
+              >
+                Assign Employee to Space
+              </button>
+            </div>
+          )}
 
           {canMutate && revision.lifecycleState === 'DRAFT' && (
             <div className="transform-actions-section">
@@ -2170,6 +2217,7 @@ export function BoundaryEditor({
           <ul className="placed-spaces-grid">
             {placements.map((p) => {
               const isSelected = selectedPlacementId === p.id;
+              const assigned = safeAssignments.find((a) => a.placementIdentityId === p.placementIdentityId);
               return (
                 <li
                   key={p.id}
@@ -2183,7 +2231,7 @@ export function BoundaryEditor({
                     aria-pressed={isSelected}
                     aria-label={`Select ${p.label ?? p.templateName}`}
                   >
-                    <strong>{p.label ?? p.templateName}</strong> ({p.templateCode}) at ({p.positionX}, {p.positionY}) • Rotation {p.rotationDegrees}°
+                    <strong>{p.label ?? p.templateName}</strong> ({p.templateCode}){assigned ? ` • Assigned: ${assigned.employeeName}` : ''} at ({p.positionX}, {p.positionY}) • Rotation {p.rotationDegrees}°
                   </button>
                 </li>
               );

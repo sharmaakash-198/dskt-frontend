@@ -1718,4 +1718,143 @@ select {
   align-items: center;
 }
 
+/* -------------------------------------------------------------
+ * Space Assignment Panel Styles
+ * ------------------------------------------------------------- */
+.assign-space-panel {
+  margin-top: 16px;
+  margin-bottom: 24px;
+}
+
+.candidate-space-section,
+.employee-selection-section,
+.period-section {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.candidate-space-section h4,
+.employee-selection-section h4,
+.period-section h4 {
+  margin-top: 0;
+  margin-bottom: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.space-context-card,
+.selected-employee-card {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 6px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+}
+
+.selected-employee-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.emp-email {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.employee-results-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.employee-result-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.employee-result-item:last-child {
+  border-bottom: none;
+}
+
+.emp-title,
+.emp-dept {
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.select-emp-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.employee-existing-assignments,
+.space-assignments-summary {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.employee-existing-assignments h5 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.assignment-mini-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.assignment-mini-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.period-badge {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-weight: 500;
+}
+
+.space-occupied-badge {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-weight: 600;
+  display: inline-block;
+  margin-left: 8px;
+}
+
+
 
